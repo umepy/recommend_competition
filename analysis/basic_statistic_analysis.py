@@ -13,7 +13,6 @@ def read_data():
     return trainA,trainB,trainC,trainD
 
 #基本統計量算出
-@profile
 def statistic_analysis(data):
     print('number of uniqe ids: '+str(data.user_id.value_counts().count()))
 

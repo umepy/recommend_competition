@@ -1,2 +1,6 @@
-# recommend_competition
-my recommend competition's project
+# 推薦コンペ用
+
+## フォルダ別の役割
+* analysis - 分析用コード
+* code - 予測用コード
+* data - 各種データ

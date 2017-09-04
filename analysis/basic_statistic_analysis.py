@@ -8,14 +8,14 @@ import time
 import seaborn as sns
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
+import tqdm
+from itertools import groupby
+import pickle
 
 #データ読み込み
-def read_data():
-    trainA = pd.read_csv('../data/train/train_A.tsv',delimiter='\t')
-    trainB = pd.read_csv('../data/train/train_B.tsv', delimiter='\t')
-    trainC = pd.read_csv('../data/train/train_C.tsv', delimiter='\t')
-    trainD = pd.read_csv('../data/train/train_D.tsv', delimiter='\t')
-    return trainA,trainB,trainC,trainD
+def read_data(name):
+    train = pd.read_csv('../data/train/train_'+name+'.tsv',delimiter='\t')
+    return train
 
 #基本統計量算出
 #@jit
@@ -30,14 +30,25 @@ def statistic_analysis(data):
 
     #ユニークIDを取得
     unique=data.user_id.unique()
-    num = []
-    for i in unique:
-        tmp=data[data['user_id'].isin([i])]
-        num.append(len(tmp))
+    DataFrameDict = {elem: pd.DataFrame for elem in unique}
+    for key in tqdm.tqdm(DataFrameDict.keys()):
+        DataFrameDict[key] = data[:][data.user_id == key]
     print('Time : '+str(time.time() - st))
-    sns.distplot(num)
+    #sns.distplot(num)
+    print(DataFrameDict)
     plt.show()
 
+#各個人のデータを抽出
+def extract_personaldata(name,data):
+    unique = data.user_id.unique()
+    DataFrameDict = {elem: pd.DataFrame for elem in unique}
+    for key in tqdm.tqdm(DataFrameDict.keys()):
+        DataFrameDict[key] = data[:][data.user_id == key]
+    print(DataFrameDict)
+    with open('../data/personal/personal_'+name+'.pickle','w') as f:
+        pickle.dump(DataFrameDict,f)
+
 if __name__=='__main__':
-    a,b,c,d=read_data()
-    statistic_analysis(a)
+    a=read_data('D')
+    #statistic_analysis(a)
+    extract_personaldata('D',a)

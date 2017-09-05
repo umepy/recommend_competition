@@ -45,10 +45,10 @@ def extract_personaldata(name,data):
     for key in tqdm.tqdm(DataFrameDict.keys()):
         DataFrameDict[key] = data[:][data.user_id == key]
     print(DataFrameDict)
-    with open('../data/personal/personal_'+name+'.pickle','w') as f:
+    with open('../data/personal/personal_'+name+'.pickle','wb') as f:
         pickle.dump(DataFrameDict,f)
 
 if __name__=='__main__':
-    a=read_data('D')
+    a=read_data('A')
     #statistic_analysis(a)
-    extract_personaldata('D',a)
+    extract_personaldata('A',a)

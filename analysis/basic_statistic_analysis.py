@@ -22,7 +22,6 @@ def read_personal_data(name):
     return data
 
 #基本統計量算出
-@jit
 def statistic_analysis(data,name=None):
     st=time.time()
     print(data.columns)

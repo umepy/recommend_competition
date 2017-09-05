@@ -48,6 +48,12 @@ def extract_personaldata(name,data):
     with open('../data/personal/personal_'+name+'.pickle','wb') as f:
         pickle.dump(DataFrameDict,f)
 
+#個人のデータをA,B,C,D全てで抽出
+def extract_all():
+    for i in ('A','B','C','D'):
+        a=read_data(i)
+        extract_personaldata(i,a)
+
 if __name__=='__main__':
     a=read_data('A')
     #statistic_analysis(a)

@@ -36,4 +36,4 @@
 - Dの人数: 320
 
 ## 実行時の手順
-1. analysis/basic_statistic_analysis.pyのextractallを実行
+1. analysis/basic_statistic_analysis.pyのextract_allを実行

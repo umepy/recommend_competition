@@ -23,11 +23,12 @@ class CrossValidation():
         #個人のデータ読み込み
         with open('../data/personal/personal_'+self.name+'.pickle','rb') as f:
             df=pickle.load(f)
-            print(df['0000000_B'])
+            print(df['0000000_B'][df['0000000_B']['time_stamp']>datetime.datetime(year=2017,month=4,day=24)])
 
     #誤差関数
     def DCG(self,user,item):
         pass
+
 
 if __name__=='__main__':
     a=CrossValidation('B')

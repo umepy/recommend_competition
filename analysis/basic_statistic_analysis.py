@@ -11,6 +11,7 @@ from multiprocessing import Pool
 import tqdm
 from itertools import groupby
 import pickle
+import datetime
 
 #データ読み込み
 def read_data(name):
@@ -57,8 +58,57 @@ def extract_all():
     for i in ('A','B','C','D'):
         a=read_data(i)
         extract_personaldata(i,a)
+        extract_ranking(i)
+
+#各個人のテスト期間での商品上位とIDCGの算出
+def extract_ranking(name):
+    # 個人のデータ読み込み
+    with open('../data/personal/personal_' + name + '.pickle', 'rb') as f:
+        df = pickle.load(f)
+
+    out_dic=dict()
+    #各ユーザに対して商品の関連度とIDCGの辞書を作成し，user_idをキーとした辞書を作成
+    for i in tqdm.tqdm(df.keys()):
+        tmp_dic=extract_items(df[i])
+        out_dic[i]=tmp_dic
+
+    with open('../data/personal/personal_test_items_IDCG_' + name + '.pickle','wb') as f:
+        pickle.dump(out_dic,f)
+
+#個人のデータから商品idと関連度を算出
+def extract_items(data):
+    test=data[data['time_stamp'] > datetime.datetime(year=2017, month=4, day=24)]
+    out_dic=dict()
+
+    #テスト期間でのidの取得
+    product_ids=pd.unique(test['product_id'])
+    for id in product_ids:
+        tmp_df=test[test['product_id']==id].reset_index()
+        out_dic[id] = 0
+        for j in range(len(tmp_df)):
+            if out_dic[id] < tmp_df['event_type'][j] and tmp_df['ad'][j] != 0:
+                out_dic[id] = tmp_df['event_type'][j]
+
+    #IDCGの計算
+    scores=list(out_dic.values())
+    scores.reverse()
+    out_dic['IDCG']=calc_IDCG(scores)
+    return out_dic
+
+#IDCGの計算
+def calc_IDCG(rank):
+    idcg=0
+    if len(rank)>=22:
+        for i in range(22):
+            idcg+=(2**rank[i]-1)/np.log2((i+1)+1)
+    else:
+        for i in range(len(rank)):
+            idcg += (2 ** rank[i] - 1) / np.log2((i + 1) + 1)
+    return idcg
+
 
 if __name__=='__main__':
-    a=read_data('B')
+    #a=read_data('D')
     #statistic_analysis(a,'B')
-    extract_personaldata('B',a)
+    #extract_personaldata('D',a)
+    extract_ranking('B')

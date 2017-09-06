@@ -34,3 +34,6 @@
 - Bの人数: 2366
 - Cの人数: 1648
 - Dの人数: 320
+
+## 実行時の手順
+1. analysis/basic_statistic_analysis.pyのextractallを実行

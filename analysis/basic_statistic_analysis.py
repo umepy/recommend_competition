@@ -14,7 +14,7 @@ import pickle
 
 #データ読み込み
 def read_data(name):
-    train = pd.read_csv('../data/train/train_'+name+'.tsv',delimiter='\t')
+    train = pd.read_csv('../data/train/train_'+name+'.tsv',delimiter='\t',parse_dates=['time_stamp'])
     return train
 def read_personal_data(name):
     with open('../data/personal/personal_'+name+'.pickle', 'rb') as f:
@@ -60,4 +60,5 @@ def extract_all():
 
 if __name__=='__main__':
     a=read_data('B')
-    statistic_analysis(a,'B')
+    #statistic_analysis(a,'B')
+    extract_personaldata('B',a)

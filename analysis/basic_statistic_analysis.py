@@ -67,17 +67,22 @@ def extract_ranking(name):
         df = pickle.load(f)
 
     out_dic=dict()
+    train_dic=dict()
     #各ユーザに対して商品の関連度とIDCGの辞書を作成し，user_idをキーとした辞書を作成
     for i in tqdm.tqdm(df.keys()):
-        tmp_dic=extract_items(df[i])
+        tmp_dic,tmp_train=extract_items(df[i])
         out_dic[i]=tmp_dic
+        train_dic[i]=tmp_train
 
     with open('../data/personal/personal_test_items_IDCG_' + name + '.pickle','wb') as f:
         pickle.dump(out_dic,f)
+    with open('../data/personal/personal_train_' + name + '.pickle','wb') as f:
+        pickle.dump(train_dic,f)
 
 #個人のデータから商品idと関連度を算出
 def extract_items(data):
     test=data[data['time_stamp'] > datetime.datetime(year=2017, month=4, day=24)]
+    train = data[data['time_stamp'] <= datetime.datetime(year=2017, month=4, day=24)]
     out_dic=dict()
 
     #テスト期間でのidの取得
@@ -93,7 +98,7 @@ def extract_items(data):
     scores=list(out_dic.values())
     scores.reverse()
     out_dic['IDCG']=calc_IDCG(scores)
-    return out_dic
+    return out_dic,train
 
 #IDCGの計算
 def calc_IDCG(rank):

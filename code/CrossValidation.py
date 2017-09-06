@@ -15,15 +15,11 @@ class CrossValidation():
 
     #データを読み込み分割
     def read_data(self):
-        data=pd.read_csv('../data/train/train_'+self.name+'.tsv',delimiter='\t',parse_dates=['time_stamp'])
-        #データを学習用，テスト用に分割
-        self.test=data[data.time_stamp > datetime.datetime(year=2017,month=4,day=24)]
-        self.train=data[data.time_stamp <= datetime.datetime(year=2017, month=4, day=24)]
-
         #個人のデータ読み込み
         with open('../data/personal/personal_test_items_IDCG_'+self.name+'.pickle','rb') as f:
             self.personal_result=pickle.load(f)
-
+        with open('../data/personal/personal_train_' + self.name + '.pickle', 'rb') as f:
+            self.personal_train=pickle.load(f)
 
     #誤差関数
     def DCG(self,user,item):

@@ -21,9 +21,9 @@ class CrossValidation():
         self.train=data[data.time_stamp <= datetime.datetime(year=2017, month=4, day=24)]
 
         #個人のデータ読み込み
-        with open('../data/personal/personal_'+self.name+'.pickle','rb') as f:
-            df=pickle.load(f)
-            print(df['0000000_B'][df['0000000_B']['time_stamp']>datetime.datetime(year=2017,month=4,day=24)])
+        with open('../data/personal/personal_test_items_IDCG_'+self.name+'.pickle','rb') as f:
+            self.personal_result=pickle.load(f)
+
 
     #誤差関数
     def DCG(self,user,item):

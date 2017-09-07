@@ -8,6 +8,8 @@ from numba import jit
 import datetime
 import pickle
 import random
+import time
+
 
 class CrossValidation():
     def __init__(self,name,K=5):
@@ -39,13 +41,53 @@ class CrossValidation():
 
     #誤差関数
     def DCG(self,user_id,items):
+        #IDCGが0の場合の分岐
+        if self.personal_result[user_id]['IDCG']==0:
+            return -1
         #まずDCGを計算
         DCG=0
         for i in range(len(items)):
-            if i in self.personal_result[user_id].keys():
-                DCG+=(2**self.personal_result[user_id][i]-1)/np.log2(i+2)
+            if items[i] in list(self.personal_result[user_id].keys()):
+                DCG+=(2**self.personal_result[user_id][items[i]]-1)/np.log2(i+2)
         return DCG/self.personal_result[user_id]['IDCG']
+
+    #評価関数
+    def evaluate(self,predict):
+        score=0.0
+        count=0
+        for i in predict.keys():
+            tmp=self.DCG(i,predict[i])
+            if tmp==-1:
+                count+=1
+            else:
+                score+=tmp
+        return score/count
+
+    #方法1 - 過去のユーザの行動履歴から推薦(評価の高いもの順)
+    def method_choice_from_past_data(self,train_ids,test_ids):
+        predict_test={}
+        for i in test_ids:
+            #ユニークitem idを取得
+            past_items=pd.unique(self.personal_train[i]['product_id'])
+            random.shuffle(past_items)
+            if len(past_items) > 22:
+                past_items=past_items[:22]
+            predict_test[i]=past_items
+        return self.evaluate(predict_test)
+
+    #Cross-validationの実行
+    def CV(self):
+        print('CV開始いたします')
+        st=time.time()
+        score_sum=0
+        for i in range(self.K):
+            score_tmp=self.method_choice_from_past_data(self.cv_trains[i],self.cv_tests[i])
+            print(str(i)+' of '+str(self.K)+' CrossValidation, score :'+str(score_tmp))
+            score_sum+=score_tmp
+        print('Final Score : '+str(score_sum/self.K))
+        print(time.time() - st)
 
 
 if __name__=='__main__':
     a=CrossValidation('B')
+    a.CV()

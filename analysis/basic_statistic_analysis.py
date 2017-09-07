@@ -116,4 +116,4 @@ if __name__=='__main__':
     #a=read_data('D')
     #statistic_analysis(a,'B')
     #extract_personaldata('D',a)
-    extract_ranking('B')
+    extract_ranking('D')

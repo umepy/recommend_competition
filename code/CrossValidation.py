@@ -76,7 +76,7 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     #Cross-validationの実行
-    def CV(self):
+    def CV(self,):
         print('CV開始いたします')
         score_sum=0
         for i in range(self.K):

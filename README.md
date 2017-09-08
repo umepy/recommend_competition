@@ -47,5 +47,13 @@ extract_rankingをA,C,Dに対して実行 - 完
 - Cの人数: 1648
 - Dの人数: 320
 
+## 結果その1
+ランダムチョイス選択(過去の行動に関連した商品からのみのランダム推薦, mean of 5x 5CrossValidation)
+* A - 0.1198
+* B - 0.1379
+* C - 0.1455
+* D - 0.0590
+* コンペサイト評価 - 0.1526
+
 ## 実行時の手順
 1. analysis/basic_statistic_analysis.pyのextract_allを実行(personalデータの作成)

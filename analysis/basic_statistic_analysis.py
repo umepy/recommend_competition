@@ -59,6 +59,7 @@ def extract_all():
         a=read_data(i)
         extract_personaldata(i,a)
         extract_ranking(i)
+    get_predict_ids()
 
 #各個人のテスト期間での商品上位とIDCGの算出
 def extract_ranking(name):
@@ -111,9 +112,34 @@ def calc_IDCG(rank):
             idcg += (2 ** rank[i] - 1) / np.log2((i + 1) + 1)
     return idcg
 
+#予測用idの取得
+def get_predict_ids():
+    df=pd.read_csv('../data/sample_submit.tsv',delimiter='\t',names=['user_id','item_id','rank'])
+    ids=pd.unique(df['user_id'])
+    ids_dic={}
+    tmp_A=[]
+    tmp_B=[]
+    tmp_C=[]
+    tmp_D=[]
+    for i in ids:
+        if 'A' in i:
+            tmp_A.append(i)
+        elif 'B' in i:
+            tmp_B.append(i)
+        elif 'C' in i:
+            tmp_C.append(i)
+        else:
+            tmp_D.append(i)
+    ids_dic['A']=tmp_A
+    ids_dic['B']=tmp_B
+    ids_dic['C']=tmp_C
+    ids_dic['D']=tmp_D
+
+    with open('../data/submit_ids.pickle','wb') as f:
+        pickle.dump(ids_dic,f)
 
 if __name__=='__main__':
     #a=read_data('D')
     #statistic_analysis(a,'B')
     #extract_personaldata('D',a)
-    extract_ranking('D')
+    get_predict_ids()

@@ -64,7 +64,7 @@ class CrossValidation():
         return score/count
 
     #方法1 - 過去のユーザの行動履歴から推薦(評価の高いもの順)
-    def method_choice_from_past_data(self,train_ids,test_ids):
+    def method_choice_from_past_data(self,test_ids):
         predict_test={}
         for i in test_ids:
             #ユニークitem idを取得
@@ -78,16 +78,24 @@ class CrossValidation():
     #Cross-validationの実行
     def CV(self):
         print('CV開始いたします')
-        st=time.time()
         score_sum=0
         for i in range(self.K):
-            score_tmp=self.method_choice_from_past_data(self.cv_trains[i],self.cv_tests[i])
+            score_tmp=self.method_choice_from_past_data(self.cv_tests[i])
             print(str(i)+' of '+str(self.K)+' CrossValidation, score :'+str(score_tmp))
             score_sum+=score_tmp
-        print('Final Score : '+str(score_sum/self.K))
-        print(time.time() - st)
+        print('Final Score '+ self.name +' : '+str(score_sum/self.K))
+        return score_sum/self.K
 
+def all_CV(number=5):
+    scores={'A':0,'B':0,'C':0,'D':0}
+    for _ in range(number):
+        for i in ['A','B','C','D']:
+            a=CrossValidation(i)
+            scores[i]+=a.CV()
+    print(str(number) + '回平均結果')
+    for i in ['A', 'B', 'C', 'D']:
+        scores[i]/=number
+        print(i + '\t' + str(scores[i]))
 
 if __name__=='__main__':
-    a=CrossValidation('B')
-    a.CV()
+    all_CV()

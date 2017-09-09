@@ -86,15 +86,15 @@ class CrossValidation():
             past_items = pd.unique(self.personal_train[i]['product_id'])
 
             #過去のデータから商品の重みを計算
-            for i in past_items:
-                tmp_dict[i]=0
-                for j in self.personal_train[i]['event_type']:
-                    if tmp_dict[i]<j:
-                        tmp_dict[i]=j
+            for j in past_items:
+                tmp_dict[j]=0
+                for k in self.personal_train[i][self.personal_train[i]['product_id']==j]['event_type']:
+                    if tmp_dict[j]<k:
+                        tmp_dict[j]=k
             sorted_list=sorted(tmp_dict.items(),key=itemgetter(0))
             if len(sorted_list) > 22:
-                past_items = sorted_list[:22]
-            predict_test[i] = sorted_list
+                sorted_list = sorted_list[:22]
+            predict_test[i] = [ x for x,y in sorted_list]
         return self.evaluate(predict_test)
 
     #Cross-validationの実行
@@ -102,7 +102,7 @@ class CrossValidation():
         print('CV開始いたします')
         score_sum=0
         for i in range(self.K):
-            score_tmp=self.method_choice_from_past_data(self.cv_tests[i])
+            score_tmp=self.method_ranked_choice(self.cv_tests[i])
             print(str(i)+' of '+str(self.K)+' CrossValidation, score :'+str(score_tmp))
             score_sum+=score_tmp
         print('Final Score '+ self.name +' : '+str(score_sum/self.K))
@@ -126,9 +126,9 @@ def all_CV(number=5):
 def all_CV_multiprocess(number=5):
     scores={'A':0,'B':0,'C':0,'D':0}
     for i in ['A','B','C','D']:
-        with Pool(processes=4) as pool:
-            for j in pool.imap_unordered(work_CV,range(number)):
-                scores[i]+=j
+        with Pool(processes=8) as pool:
+            for j in [pool.apply_async(work_CV, (i,)) for i in range(number)]:
+                scores[i]+=j.get()
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:
         scores[i]/=number
@@ -136,3 +136,4 @@ def all_CV_multiprocess(number=5):
 
 if __name__=='__main__':
     all_CV()
+    #work_CV('B')

@@ -10,6 +10,7 @@ import pickle
 import random
 import time
 from multiprocessing import Process,Pool
+from operator import itemgetter
 
 
 class CrossValidation():
@@ -65,7 +66,7 @@ class CrossValidation():
         return score/count
 
     #方法1 - 過去のユーザの行動履歴から推薦(ランダム抽出推薦)
-    def method_choice_from_past_data(self,test_ids):
+    def method_random_choice(self,test_ids):
         predict_test={}
         for i in test_ids:
             #ユニークitem idを取得
@@ -74,6 +75,26 @@ class CrossValidation():
             if len(past_items) > 22:
                 past_items=past_items[:22]
             predict_test[i]=past_items
+        return self.evaluate(predict_test)
+
+    # 方法2 - 過去のユーザの行動履歴から推薦(簡単な評価からの順位付け推薦)
+    def method_ranked_choice(self, test_ids):
+        predict_test = {}
+        for i in test_ids:
+            # ユニークitem idを取得
+            tmp_dict={}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            #過去のデータから商品の重みを計算
+            for i in past_items:
+                tmp_dict[i]=0
+                for j in self.personal_train[i]['event_type']:
+                    if tmp_dict[i]<j:
+                        tmp_dict[i]=j
+            sorted_list=sorted(tmp_dict.items(),key=itemgetter(0))
+            if len(sorted_list) > 22:
+                past_items = sorted_list[:22]
+            predict_test[i] = sorted_list
         return self.evaluate(predict_test)
 
     #Cross-validationの実行

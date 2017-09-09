@@ -134,7 +134,7 @@ class CrossValidation():
                 for k in self.personal_train[i][self.personal_train[i]['product_id'] == j]['event_type']:
                     if k == 0:
                         tmp_dict[j] +=1
-                    if k==3:
+                    if k==-1:
                         del tmp_dict[j]
                         break
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1),reverse=True)
@@ -157,7 +157,7 @@ class CrossValidation():
                 for k in self.personal_train[i][self.personal_train[i]['product_id'] == j]['event_type']:
                     if k == 2:
                         tmp_dict[j] += 1
-                    if k == 3:
+                    if k == -1:
                         del tmp_dict[j]
                         break
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)

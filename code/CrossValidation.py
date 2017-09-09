@@ -66,7 +66,7 @@ class CrossValidation():
         return score/count
 
     # 方法1 - 過去のユーザの行動履歴から推薦(ランダム抽出推薦)
-    def method_random_choice(self,test_ids):
+    def method1_random_choice(self,test_ids):
         predict_test={}
         for i in test_ids:
             #ユニークitem idを取得
@@ -78,7 +78,7 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法2 - 過去のユーザの行動履歴から推薦(簡単な評価からの順位付け推薦)
-    def method_ranked_choice(self, test_ids):
+    def method2_ranked_choice(self, test_ids):
         predict_test = {}
         for i in test_ids:
             # ユニークitem idを取得
@@ -98,7 +98,7 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法3 - 過去のユーザの行動履歴から推薦(購買商品は推薦しない)
-    def method_ranked_conversion_ignore_choice(self, test_ids):
+    def method3_ranked_conversion_ignore_choice(self, test_ids):
         predict_test = {}
         for i in test_ids:
             # ユニークitem idを取得
@@ -121,7 +121,7 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法4 - カート商品を重視した順位付け
-    def method_ranked_cart(self, test_ids):
+    def method4_ranked_cart(self, test_ids):
         predict_test = {}
         for i in test_ids:
             # ユニークitem idを取得
@@ -144,7 +144,7 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法5 - クリックした商品を重視した順位付け
-    def method_ranked_click(self, test_ids):
+    def method5_ranked_click(self, test_ids):
         predict_test = {}
         for i in test_ids:
             # ユニークitem idを取得
@@ -158,6 +158,29 @@ class CrossValidation():
                     if k == 2:
                         tmp_dict[j] += 1
                     if k == -1:
+                        del tmp_dict[j]
+                        break
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[i] = [x for x, y in sorted_list]
+        return self.evaluate(predict_test)
+
+    # 方法6 - 閲覧した商品を重視した順位付け
+    def method6_ranked_view(self, test_ids):
+        predict_test = {}
+        for i in test_ids:
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for k in self.personal_train[i][self.personal_train[i]['product_id'] == j]['event_type']:
+                    if k == 1:
+                        tmp_dict[j] += 1
+                    if k == 3:
                         del tmp_dict[j]
                         break
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
@@ -185,15 +208,17 @@ class CrossValidation():
     #メゾッド選択用関数
     def choice_func(self,num):
         if num==1:
-            return self.method_random_choice
+            return self.method1_random_choice
         elif num==2:
-            return self.method_ranked_choice
+            return self.method2_ranked_choice
         elif num==3:
-            return self.method_ranked_conversion_ignore_choice
+            return self.method3_ranked_conversion_ignore_choice
         elif num==4:
-            return self.method_ranked_cart
+            return self.method4_ranked_cart
         elif num==5:
-            return self.method_ranked_click
+            return self.method5_ranked_click
+        elif num==6:
+            return self.method6_ranked_view
 
 
 def work_CV(name,method):
@@ -223,5 +248,5 @@ def all_CV_multiprocess(number=5):
         print(i + '\t' + str(scores[i]))
 
 if __name__=='__main__':
-    all_CV(5,5)
+    all_CV(5,6)
     #work_CV('B')

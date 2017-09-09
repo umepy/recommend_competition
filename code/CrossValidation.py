@@ -9,6 +9,7 @@ import datetime
 import pickle
 import random
 import time
+from multiprocessing import Process,Pool
 
 
 class CrossValidation():
@@ -63,7 +64,7 @@ class CrossValidation():
                 score+=tmp
         return score/count
 
-    #方法1 - 過去のユーザの行動履歴から推薦(評価の高いもの順)
+    #方法1 - 過去のユーザの行動履歴から推薦(ランダム抽出推薦)
     def method_choice_from_past_data(self,test_ids):
         predict_test={}
         for i in test_ids:
@@ -86,12 +87,27 @@ class CrossValidation():
         print('Final Score '+ self.name +' : '+str(score_sum/self.K))
         return score_sum/self.K
 
+def work_CV(name):
+    a=CrossValidation(name)
+    a.CV()
+
 def all_CV(number=5):
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A','B','C','D']:
             a=CrossValidation(i)
             scores[i]+=a.CV()
+    print(str(number) + '回平均結果')
+    for i in ['A', 'B', 'C', 'D']:
+        scores[i]/=number
+        print(i + '\t' + str(scores[i]))
+
+def all_CV_multiprocess(number=5):
+    scores={'A':0,'B':0,'C':0,'D':0}
+    for i in ['A','B','C','D']:
+        with Pool(processes=4) as pool:
+            for j in pool.imap_unordered(work_CV,range(number)):
+                scores[i]+=j
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:
         scores[i]/=number

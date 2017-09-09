@@ -65,7 +65,7 @@ class CrossValidation():
                 score+=tmp
         return score/count
 
-    #方法1 - 過去のユーザの行動履歴から推薦(ランダム抽出推薦)
+    # 方法1 - 過去のユーザの行動履歴から推薦(ランダム抽出推薦)
     def method_random_choice(self,test_ids):
         predict_test={}
         for i in test_ids:
@@ -91,13 +91,13 @@ class CrossValidation():
                 for k in self.personal_train[i][self.personal_train[i]['product_id']==j]['event_type']:
                     if tmp_dict[j]<k:
                         tmp_dict[j]=k
-            sorted_list=sorted(tmp_dict.items(),key=itemgetter(0))
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
             if len(sorted_list) > 22:
                 sorted_list = sorted_list[:22]
             predict_test[i] = [ x for x,y in sorted_list]
         return self.evaluate(predict_test)
 
-    # 方法2 - 過去のユーザの行動履歴から推薦(簡単な評価からの順位付け推薦)
+    # 方法3 - 過去のユーザの行動履歴から推薦(購買商品は推薦しない)
     def method_ranked_conversion_ignore_choice(self, test_ids):
         predict_test = {}
         for i in test_ids:
@@ -109,9 +109,58 @@ class CrossValidation():
             for j in past_items:
                 tmp_dict[j] = 0
                 for k in self.personal_train[i][self.personal_train[i]['product_id'] == j]['event_type']:
-                    if tmp_dict[j] < k and k!=3:
+                    if tmp_dict[j] < k:
                         tmp_dict[j] = k
-            sorted_list = sorted(tmp_dict.items(), key=itemgetter(0))
+                    if k==3:
+                        del tmp_dict[j]
+                        break
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[i] = [x for x, y in sorted_list]
+        return self.evaluate(predict_test)
+
+    # 方法4 - カート商品を重視した順位付け
+    def method_ranked_cart(self, test_ids):
+        predict_test = {}
+        for i in test_ids:
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for k in self.personal_train[i][self.personal_train[i]['product_id'] == j]['event_type']:
+                    if k == 0:
+                        tmp_dict[j] +=1
+                    if k==3:
+                        del tmp_dict[j]
+                        break
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1),reverse=True)
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[i] = [x for x, y in sorted_list]
+        return self.evaluate(predict_test)
+
+    # 方法5 - クリックした商品を重視した順位付け
+    def method_ranked_click(self, test_ids):
+        predict_test = {}
+        for i in test_ids:
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for k in self.personal_train[i][self.personal_train[i]['product_id'] == j]['event_type']:
+                    if k == 2:
+                        tmp_dict[j] += 1
+                    if k == 3:
+                        del tmp_dict[j]
+                        break
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
             if len(sorted_list) > 22:
                 sorted_list = sorted_list[:22]
             predict_test[i] = [x for x, y in sorted_list]
@@ -129,6 +178,7 @@ class CrossValidation():
             score_tmp=method_func(self.cv_tests[i])
             print(str(i)+' of '+str(self.K)+' CrossValidation, score :'+str(score_tmp))
             score_sum+=score_tmp
+        print('メゾッド選択 ：　' + str(method))
         print('Final Score '+ self.name +' : '+str(score_sum/self.K))
         return score_sum/self.K
 
@@ -138,6 +188,12 @@ class CrossValidation():
             return self.method_random_choice
         elif num==2:
             return self.method_ranked_choice
+        elif num==3:
+            return self.method_ranked_conversion_ignore_choice
+        elif num==4:
+            return self.method_ranked_cart
+        elif num==5:
+            return self.method_ranked_click
 
 
 def work_CV(name,method):
@@ -167,5 +223,5 @@ def all_CV_multiprocess(number=5):
         print(i + '\t' + str(scores[i]))
 
 if __name__=='__main__':
-    all_CV(5,2)
+    all_CV(5,5)
     #work_CV('B')

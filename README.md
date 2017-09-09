@@ -56,5 +56,19 @@ extract_rankingをA,C,Dに対して実行 - 完
 * D - 0.0590
 * コンペサイト評価 - 0.1526
 
+## 結果その2
+簡単な重み付け選択推薦(過去の行動に関連した商品からそのうち最大のイベントを重みとした推薦(重み3を除外しても変わらず), mean of 5x 5CrossValidation)
+* A - 0.1227
+* B - 0.1386
+* C - 0.1454
+* D - 0.05849
+
+## 結果その3
+簡単な重み付け選択推薦(その2の手法のうち購入重みを無視した推薦, mean of 5x 5CrossValidation)
+* A - 0.1227
+* B - 0.1386
+* C - 0.1454
+* D - 0.05849
+
 ## 実行時の手順
 1. analysis/basic_statistic_analysis.pyのextract_allを実行(personalデータの作成)

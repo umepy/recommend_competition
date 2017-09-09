@@ -97,27 +97,59 @@ class CrossValidation():
             predict_test[i] = [ x for x,y in sorted_list]
         return self.evaluate(predict_test)
 
+    # 方法2 - 過去のユーザの行動履歴から推薦(簡単な評価からの順位付け推薦)
+    def method_ranked_conversion_ignore_choice(self, test_ids):
+        predict_test = {}
+        for i in test_ids:
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for k in self.personal_train[i][self.personal_train[i]['product_id'] == j]['event_type']:
+                    if tmp_dict[j] < k and k!=3:
+                        tmp_dict[j] = k
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(0))
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[i] = [x for x, y in sorted_list]
+        return self.evaluate(predict_test)
+
     #Cross-validationの実行
-    def CV(self,):
+    def CV(self,method=None):
+        if method==None:
+            print('メゾッドを選択してください')
+            return -1
+        method_func=self.choice_func(method)
         print('CV開始いたします')
         score_sum=0
         for i in range(self.K):
-            score_tmp=self.method_ranked_choice(self.cv_tests[i])
+            score_tmp=method_func(self.cv_tests[i])
             print(str(i)+' of '+str(self.K)+' CrossValidation, score :'+str(score_tmp))
             score_sum+=score_tmp
         print('Final Score '+ self.name +' : '+str(score_sum/self.K))
         return score_sum/self.K
 
-def work_CV(name):
-    a=CrossValidation(name)
-    a.CV()
+    #メゾッド選択用関数
+    def choice_func(self,num):
+        if num==1:
+            return self.method_random_choice
+        elif num==2:
+            return self.method_ranked_choice
 
-def all_CV(number=5):
+
+def work_CV(name,method):
+    a=CrossValidation(name)
+    a.CV(method)
+
+def all_CV(number=5,method=None):
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A','B','C','D']:
             a=CrossValidation(i)
-            scores[i]+=a.CV()
+            scores[i]+=a.CV(method)
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:
         scores[i]/=number
@@ -135,5 +167,5 @@ def all_CV_multiprocess(number=5):
         print(i + '\t' + str(scores[i]))
 
 if __name__=='__main__':
-    all_CV()
+    all_CV(5,2)
     #work_CV('B')

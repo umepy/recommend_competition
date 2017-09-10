@@ -13,7 +13,7 @@ from itertools import groupby
 import pickle
 import datetime
 
-#データ読み込み
+# データ読み込み
 def read_data(name):
     train = pd.read_csv('../data/train/train_'+name+'.tsv',delimiter='\t',parse_dates=['time_stamp'])
     return train
@@ -21,8 +21,16 @@ def read_personal_data(name):
     with open('../data/personal/personal_'+name+'.pickle', 'rb') as f:
         data=pickle.load(f)
     return data
+def read_personal_test(name):
+    with open('../data/personal/personal_test_items_IDCG_'+name+'.pickle', 'rb') as f:
+        data=pickle.load(f)
+    return data
+def read_personal_train(name):
+    with open('../data/personal/personal_train_'+name+'.pickle', 'rb') as f:
+        data=pickle.load(f)
+    return data
 
-#基本統計量算出
+# 基本統計量算出
 def statistic_analysis(data,name=None):
     st=time.time()
     print(data.columns)
@@ -44,7 +52,7 @@ def statistic_analysis(data,name=None):
         print(num)
         plt.show()
 
-#各個人のデータを抽出
+# 各個人のデータを抽出
 def extract_personaldata(name,data):
     unique = data.user_id.unique()
     DataFrameDict = {elem: pd.DataFrame for elem in unique}
@@ -53,7 +61,7 @@ def extract_personaldata(name,data):
     with open('../data/personal/personal_'+name+'.pickle','wb') as f:
         pickle.dump(DataFrameDict,f)
 
-#個人のデータをA,B,C,D全てで抽出
+# 個人のデータをA,B,C,D全てで抽出
 def extract_all():
     for i in ('A','B','C','D'):
         a=read_data(i)
@@ -61,7 +69,7 @@ def extract_all():
         extract_ranking(i)
     get_predict_ids()
 
-#各個人のテスト期間での商品上位とIDCGの算出
+# 各個人のテスト期間での商品上位とIDCGの算出
 def extract_ranking(name):
     # 個人のデータ読み込み
     with open('../data/personal/personal_' + name + '.pickle', 'rb') as f:
@@ -80,7 +88,7 @@ def extract_ranking(name):
     with open('../data/personal/personal_train_' + name + '.pickle','wb') as f:
         pickle.dump(train_dic,f)
 
-#個人のデータから商品idと関連度を算出
+# 個人のデータから商品idと関連度を算出
 def extract_items(data):
     test=data[data['time_stamp'] > datetime.datetime(year=2017, month=4, day=24)]
     train = data[data['time_stamp'] <= datetime.datetime(year=2017, month=4, day=24)]
@@ -101,7 +109,7 @@ def extract_items(data):
     out_dic['IDCG']=calc_IDCG(scores)
     return out_dic,train
 
-#IDCGの計算
+# IDCGの計算
 def calc_IDCG(rank):
     idcg=0
     if len(rank)>=22:
@@ -112,7 +120,7 @@ def calc_IDCG(rank):
             idcg += (2 ** rank[i] - 1) / np.log2((i + 1) + 1)
     return idcg
 
-#予測用idの取得
+# 予測用idの取得
 def get_predict_ids():
     df=pd.read_csv('../data/sample_submit.tsv',delimiter='\t',names=['user_id','item_id','rank'])
     ids=pd.unique(df['user_id'])
@@ -137,6 +145,8 @@ def get_predict_ids():
 
     with open('../data/submit_ids.pickle','wb') as f:
         pickle.dump(ids_dic,f)
+
+#
 
 if __name__=='__main__':
     #a=read_data('D')

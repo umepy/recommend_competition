@@ -189,7 +189,7 @@ class CrossValidation():
             predict_test[i] = [x for x, y in sorted_list]
         return self.evaluate(predict_test)
 
-    #Cross-validationの実行
+    # Cross-validationの実行
     def CV(self,method=None):
         if method==None:
             print('メゾッドを選択してください')

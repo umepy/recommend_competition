@@ -146,7 +146,66 @@ def get_predict_ids():
     with open('../data/submit_ids.pickle','wb') as f:
         pickle.dump(ids_dic,f)
 
-#
+# テスト期間における訓練期間のitemの含有量
+def check_persentage_of_items_in_test():
+    for name in ['A','B','C','D']:
+        train=read_personal_train(name)
+        test=read_personal_test(name)
+
+        # 各種スコアの初期化
+        all_items=0
+        all_count=0
+        conv_items=0
+        conv_count=0
+        click_items=0
+        click_count=0
+        view_items=0
+        view_count=0
+
+        # テスト期間のユニークIDを取得
+        unique_ids = test.keys()
+        for i in unique_ids:
+            tmp_train=train[i]
+            tmp_test=test[i]
+
+            if len(pd.unique(tmp_test['product_id'])) !=0:
+                set_train=set(pd.unique(tmp_train['product_id']))
+                set_test=set(pd.unique(tmp_test['product_id']))
+                set_and=set_train & set_test
+                all_items+=1.0*len(set_train)/len(set_and)
+                all_count+=1
+
+            if len(pd.unique(tmp_train[tmp_train['event_type']==3])) !=0:
+                set_train=set(pd.unique(tmp_train[tmp_train['event_type']==3]['product_id']))
+                set_test=set(pd.unique(tmp_test[tmp_test['event_type']==3]['product_id']))
+                set_and=set_train & set_test
+                conv_items+=1.0*len(set_train)/len(set_and)
+                conv_count+=1
+
+            if len(pd.unique(tmp_train[tmp_train['event_type']==2])) !=0:
+                set_train=set(pd.unique(tmp_train[tmp_train['event_type']==2]['product_id']))
+                set_test=set(pd.unique(tmp_test[tmp_test['event_type']==2]))
+                set_and=set_train & set_test
+                click_items+=1.0*len(set_train)/len(set_and)
+                click_count+=1
+
+            if len(pd.unique(tmp_train[tmp_train['event_type']==1])) !=0:
+                set_train=set(pd.unique(tmp_train[tmp_train['event_type']==1]['product_id']))
+                set_test=set(pd.unique(tmp_test[tmp_test['event_type']==1]))
+                set_and=set_train & set_test
+                view_items+=1.0*len(set_train)/len(set_and)
+                view_count+=1
+
+        all_items/=all_count
+        conv_items/=conv_count
+        click_items/=click_count
+        view_items/=view_count
+
+        print('Percentage of '+name)
+        print('All items : '+str(all_items))
+        print('Conv items : '+str(conv_items))
+        print('Click items : '+str(click_items))
+        print('View items : '+str(view_items))
 
 if __name__=='__main__':
     #a=read_data('D')

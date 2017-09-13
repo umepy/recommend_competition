@@ -76,15 +76,19 @@ def extract_ranking(name):
         df = pickle.load(f)
 
     out_dic=dict()
+    test_dic=dict()
     train_dic=dict()
     #各ユーザに対して商品の関連度とIDCGの辞書を作成し，user_idをキーとした辞書を作成
     for i in tqdm.tqdm(df.keys()):
-        tmp_dic,tmp_train=extract_items(df[i])
+        tmp_dic,tmp_test,tmp_train=extract_items(df[i])
         out_dic[i]=tmp_dic
+        test_dic[i]=tmp_test
         train_dic[i]=tmp_train
 
     with open('../data/personal/personal_test_items_IDCG_' + name + '.pickle','wb') as f:
         pickle.dump(out_dic,f)
+    with open('../data/personal/personal_test_' + name + '.pickle', 'wb') as f:
+        pickle.dump(test_dic, f)
     with open('../data/personal/personal_train_' + name + '.pickle','wb') as f:
         pickle.dump(train_dic,f)
 
@@ -107,7 +111,7 @@ def extract_items(data):
     scores=list(out_dic.values())
     scores.reverse()
     out_dic['IDCG']=calc_IDCG(scores)
-    return out_dic,train
+    return out_dic,test,train
 
 # IDCGの計算
 def calc_IDCG(rank):
@@ -167,6 +171,7 @@ def check_persentage_of_items_in_test():
         for i in unique_ids:
             tmp_train=train[i]
             tmp_test=test[i]
+            print(tmp_test)
 
             if len(pd.unique(tmp_test['product_id'])) !=0:
                 set_train=set(pd.unique(tmp_train['product_id']))
@@ -211,4 +216,5 @@ if __name__=='__main__':
     #a=read_data('D')
     #statistic_analysis(a,'B')
     #extract_personaldata('D',a)
-    get_predict_ids()
+    #get_predict_ids()
+    check_persentage_of_items_in_test()

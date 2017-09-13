@@ -212,6 +212,9 @@ def check_persentage_of_items_in_test():
         print('Click items : '+str(click_items))
         print('View items : '+str(view_items))
 
+
+
+
 if __name__=='__main__':
     #a=read_data('D')
     #statistic_analysis(a,'B')

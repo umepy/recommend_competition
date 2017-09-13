@@ -236,6 +236,16 @@ def all_CV(number=5,method=None):
         scores[i]/=number
         print(i + '\t' + str(scores[i]))
 
+    print('加重平均結果 : '+str(result_weight_mean(scores)))
+
+# 各カテゴリの結果を予測数の加重平均したもの
+def result_weight_mean(result):
+    population = {'A': 7264.0/11598, 'B': 2366.0/11598, 'C': 1648.0/11598, 'D': 320.0/11598}
+    score=0
+    for i in ['A','B','C','D']:
+        score+=result[i]*population[i]
+    return score
+
 def all_CV_multiprocess(number=5):
     scores={'A':0,'B':0,'C':0,'D':0}
     for i in ['A','B','C','D']:

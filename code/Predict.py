@@ -7,6 +7,7 @@ import random
 import time
 from numba import jit
 from operator import itemgetter
+import tqdm
 
 class Predict():
     def __init__(self):
@@ -35,7 +36,7 @@ class Predict():
 
     def method6_ranked_view(self, name, test_ids):
         predict_test = {}
-        for i in test_ids:
+        for i in tqdm.tqdm(test_ids):
             # ユニークitem idを取得
             tmp_dict = {}
             past_items = pd.unique(self.personal_train[name][i]['product_id'])
@@ -59,6 +60,7 @@ class Predict():
         print('予測開始します')
         predict_ids={}
         for i in ['A','B','C','D']:
+            print(i)
             predict_ids[i]=self.method6_ranked_view(i, self.submit_ids[i])
 
         submit_list=[]

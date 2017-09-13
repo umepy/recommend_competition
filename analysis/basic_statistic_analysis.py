@@ -22,7 +22,7 @@ def read_personal_data(name):
         data=pickle.load(f)
     return data
 def read_personal_test(name):
-    with open('../data/personal/personal_test_items_IDCG_'+name+'.pickle', 'rb') as f:
+    with open('../data/personal/personal_test_'+name+'.pickle', 'rb') as f:
         data=pickle.load(f)
     return data
 def read_personal_train(name):

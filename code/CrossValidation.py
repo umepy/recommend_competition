@@ -258,5 +258,6 @@ def all_CV_multiprocess(number=5):
         print(i + '\t' + str(scores[i]))
 
 if __name__=='__main__':
-    all_CV(5,6)
-    #work_CV('B')
+    #all_CV(5,6)
+    scores = {'A': 0.1530, 'B': 0.1505, 'C': 0.1836, 'D': 0.06119}
+    print(result_weight_mean(scores))

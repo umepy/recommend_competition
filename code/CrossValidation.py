@@ -19,7 +19,6 @@ class CrossValidation():
         self.K = K
         self.read_data()
         self.split_data()
-        self.method=method
         self.method_func=self.choice_func(method)
 
     #データを読み込み分割
@@ -217,7 +216,6 @@ class CrossValidation():
 
     # Cross-validationの実行
     def CV(self):
-        print('CV開始いたします')
         jobs=[]
         manager = Manager()
         score_dic = manager.dict()
@@ -226,7 +224,6 @@ class CrossValidation():
             jobs.append(p)
         [x.start() for x in jobs]
         [x.join() for x in jobs]
-        print('メゾッド選択 ：　' + str(self.method))
         print('Score '+ self.name +' : {0}'.format(np.mean(list(score_dic.values()))))
         return np.mean(list(score_dic.values()))
 
@@ -261,6 +258,8 @@ def work_CV(name,method):
     a.CV(method)
 
 def all_CV(number=5,method=None):
+    print('CV開始いたします')
+    print('メゾッド選択 ：　' + str(method))
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A','B','C','D']:

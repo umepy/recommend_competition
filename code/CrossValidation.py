@@ -209,8 +209,8 @@ class CrossValidation():
                     elif k== 2:
                         tmp_dict[j] += 1
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
-            if len(sorted_list) > 22:
-                sorted_list = sorted_list[:22]
+            if len(sorted_list) > 4:
+                sorted_list = sorted_list[:4]
             predict_test[i] = [x for x, y in sorted_list]
         return self.evaluate(predict_test)
 
@@ -259,11 +259,10 @@ def work_CV(name,method):
 
 def all_CV(number=5,method=None):
     print('CV開始いたします')
-    print('メゾッド選択 ：　' + str(method))
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A','B','C','D']:
-            a=CrossValidation(i,K=number,method=method)
+            a=CrossValidation(i,method=method)
             scores[i]+=a.CV()
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:
@@ -271,6 +270,7 @@ def all_CV(number=5,method=None):
         print(i + '\t' + str(scores[i]))
 
     print('加重平均結果 : '+str(result_weight_mean(scores)))
+    print('メゾッド選択 ：　' + str(method))
 
 # 各カテゴリの結果を予測数の加重平均したもの
 def result_weight_mean(result):
@@ -280,16 +280,6 @@ def result_weight_mean(result):
         score+=result[i]*population[i]
     return score
 
-def all_CV_multiprocess(number=5):
-    scores={'A':0,'B':0,'C':0,'D':0}
-    for i in ['A','B','C','D']:
-        with Pool(processes=8) as pool:
-            for j in [pool.apply_async(work_CV, (i,)) for i in range(number)]:
-                scores[i]+=j.get()
-    print(str(number) + '回平均結果')
-    for i in ['A', 'B', 'C', 'D']:
-        scores[i]/=number
-        print(i + '\t' + str(scores[i]))
 
 if __name__=='__main__':
-    all_CV(5,7)
+    all_CV(1,7)

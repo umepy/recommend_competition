@@ -9,16 +9,18 @@ import datetime
 import pickle
 import random
 import time
-from multiprocessing import Process,Pool
+from multiprocessing import Process,Pool,Manager
 from operator import itemgetter
 
 
 class CrossValidation():
-    def __init__(self,name,K=5):
+    def __init__(self,name,K=5,method=None):
         self.name=name
         self.K = K
         self.read_data()
         self.split_data()
+        self.method=method
+        self.method_func=self.choice_func(method)
 
     #データを読み込み分割
     def read_data(self):
@@ -189,24 +191,55 @@ class CrossValidation():
             predict_test[i] = [x for x, y in sorted_list]
         return self.evaluate(predict_test)
 
+    # 方法7 - 閲覧>カート>クリックで順位付け
+    def method7_hybrid(self, test_ids):
+        predict_test = {}
+        for i in test_ids:
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for k in self.personal_train[i][self.personal_train[i]['product_id'] == j]['event_type']:
+                    if k == 1:
+                        tmp_dict[j] += 100
+                    elif k == 0:
+                        tmp_dict[j] += 10
+                    elif k== 2:
+                        tmp_dict[j] += 1
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[i] = [x for x, y in sorted_list]
+        return self.evaluate(predict_test)
+
     # Cross-validationの実行
-    def CV(self,method=None):
-        if method==None:
-            print('メゾッドを選択してください')
-            return -1
-        method_func=self.choice_func(method)
+    def CV(self):
         print('CV開始いたします')
-        score_sum=0
+        jobs=[]
+        manager = Manager()
+        score_dic = manager.dict()
         for i in range(self.K):
-            score_tmp=method_func(self.cv_tests[i])
-            print(str(i)+' of '+str(self.K)+' CrossValidation, score :'+str(score_tmp))
-            score_sum+=score_tmp
-        print('メゾッド選択 ：　' + str(method))
-        print('Final Score '+ self.name +' : '+str(score_sum/self.K))
-        return score_sum/self.K
+            p = Process(target=self.do_method, args=(self.cv_tests[i],score_dic))
+            jobs.append(p)
+        [x.start() for x in jobs]
+        [x.join() for x in jobs]
+        print('メゾッド選択 ：　' + str(self.method))
+        print('Score '+ self.name +' : {0}'.format(np.mean(list(score_dic.values()))))
+        return np.mean(list(score_dic.values()))
+
+    # 並列計算用のCV関数
+    def do_method(self,data,dic):
+        result = self.method_func(data)
+        dic[result] = result
 
     #メゾッド選択用関数
     def choice_func(self,num):
+        if num==None:
+            print('メゾッドを選択してください')
+            return -1
         if num==1:
             return self.method1_random_choice
         elif num==2:
@@ -219,6 +252,8 @@ class CrossValidation():
             return self.method5_ranked_click
         elif num==6:
             return self.method6_ranked_view
+        elif num==7:
+            return self.method7_hybrid
 
 
 def work_CV(name,method):
@@ -229,8 +264,8 @@ def all_CV(number=5,method=None):
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A','B','C','D']:
-            a=CrossValidation(i)
-            scores[i]+=a.CV(method)
+            a=CrossValidation(i,K=number,method=method)
+            scores[i]+=a.CV()
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:
         scores[i]/=number
@@ -258,6 +293,4 @@ def all_CV_multiprocess(number=5):
         print(i + '\t' + str(scores[i]))
 
 if __name__=='__main__':
-    #all_CV(5,6)
-    scores = {'A': 0.1530, 'B': 0.1505, 'C': 0.1836, 'D': 0.06119}
-    print(result_weight_mean(scores))
+    all_CV(5,7)

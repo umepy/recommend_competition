@@ -12,6 +12,7 @@ import tqdm
 from itertools import groupby
 import pickle
 import datetime
+from scipy import stats
 
 # データ読み込み
 def read_data(name):
@@ -29,6 +30,10 @@ def read_personal_train(name):
     with open('../data/personal/personal_train_'+name+'.pickle', 'rb') as f:
         data=pickle.load(f)
     return data
+def read_personal_test_idcg(name):
+    with open('../data/personal/personal_test_items_IDCG_'+name+'.pickle', 'rb') as f:
+        data=pickle.load(f)
+    return data
 
 # 基本統計量算出
 def statistic_analysis(data,name=None):
@@ -37,20 +42,39 @@ def statistic_analysis(data,name=None):
     print('number of uniqe ids: '+str(data.user_id.value_counts().count()))
     print('\nコンバージョン:3, クリック:2, 閲覧:1, カート:0')
     print(data['event_type'].value_counts())
+    print(data['event_type'].value_counts()/sum(data['event_type'].value_counts()))
     print('\n')
     print(data['ad'].value_counts())
 
     if name != None:
         #ユニークIDを取得
-        personal_dic = read_personal_data('B')
+        personal_dic = read_personal_data(name)
         num=[]
         for i in personal_dic.keys():
             if len(personal_dic[i]) < 1000:
                 num.append(len(personal_dic[i]))
         print('Time : '+str(time.time() - st))
-        sns.distplot(num,kde=False,bins=100)
-        print(num)
-        plt.show()
+        #sns.distplot(num,kde=False,bins=100)
+        #plt.show()
+        print('number of category: {0}'.format(len(num)))
+        print('mean of persons num: {0}'.format(np.mean(num)))
+        print('std of persons num: {0}'.format(np.std(num)))
+        print('1Q : {0}'.format(stats.scoreatpercentile(num,25)))
+        print('2Q : {0}'.format(stats.scoreatpercentile(num, 50)))
+        print('3Q : {0}'.format(stats.scoreatpercentile(num, 75)))
+        print('\nテスト期間でのユニーク商品数')
+
+        test_dic=read_personal_test(name)
+        num=[]
+        for i in test_dic.keys():
+            num.append(len(pd.unique(test_dic[i]['product_id'])))
+        print('number of category: {0}'.format(len(num)))
+        print('mean of persons num: {0}'.format(np.mean(num)))
+        print('std of persons num: {0}'.format(np.std(num)))
+        print('1Q : {0}'.format(stats.scoreatpercentile(num, 25)))
+        print('2Q : {0}'.format(stats.scoreatpercentile(num, 50)))
+        print('3Q : {0}'.format(stats.scoreatpercentile(num, 75)))
+
 
 # 各個人のデータを抽出
 def extract_personaldata(name,data):
@@ -155,69 +179,121 @@ def check_persentage_of_items_in_test():
     for name in ['A','B','C','D']:
         train=read_personal_train(name)
         test=read_personal_test(name)
+        idcg=read_personal_test_idcg(name)
 
         # 各種スコアの初期化
         all_items=0
         all_count=0
         conv_items=0
         conv_count=0
+        conv_ad=0
         click_items=0
         click_count=0
+        click_only=0
         view_items=0
         view_count=0
+        view_only=0
+        top_22=0
+        top_count=0
 
         # テスト期間のユニークIDを取得
         unique_ids = test.keys()
-        for i in unique_ids:
+        for i in tqdm.tqdm(unique_ids):
             tmp_train=train[i]
             tmp_test=test[i]
-            print(tmp_test)
+            set_train = set(pd.unique(tmp_train['product_id']))
+
+            set_conv = set()
+            set_ad = set()
+            set_onlyclick = set()
+            set_onlyview=set()
 
             if len(pd.unique(tmp_test['product_id'])) !=0:
-                set_train=set(pd.unique(tmp_train['product_id']))
                 set_test=set(pd.unique(tmp_test['product_id']))
                 set_and=set_train & set_test
-                all_items+=1.0*len(set_train)/len(set_and)
+                if len(set_and) != 0:
+                    all_items+=1.0/len(set_test)*len(set_and)
                 all_count+=1
 
-            if len(pd.unique(tmp_train[tmp_train['event_type']==3])) !=0:
-                set_train=set(pd.unique(tmp_train[tmp_train['event_type']==3]['product_id']))
-                set_test=set(pd.unique(tmp_test[tmp_test['event_type']==3]['product_id']))
+            if len(pd.unique(tmp_test[tmp_test['event_type']==3]['product_id'])) !=0:
+                filtered_test=tmp_test[tmp_test['event_type'] == 3]
+                set_test=set(pd.unique(filtered_test['product_id']))
+                set_conv=set_test
+                set_ad=set(pd.unique(filtered_test[filtered_test['ad']==1]['product_id']))
+                set_nonad=set_conv-set_ad
                 set_and=set_train & set_test
-                conv_items+=1.0*len(set_train)/len(set_and)
+                set_and_ad=set_train & set_ad
+                if len(set_and) != 0:
+                    conv_items+=1.0/len(set_test)*len(set_and)
+                if len(set_and_ad) != 0:
+                    conv_ad+=1.0/len(set_ad)*len(set_and_ad)
                 conv_count+=1
 
-            if len(pd.unique(tmp_train[tmp_train['event_type']==2])) !=0:
-                set_train=set(pd.unique(tmp_train[tmp_train['event_type']==2]['product_id']))
-                set_test=set(pd.unique(tmp_test[tmp_test['event_type']==2]))
+            if len(pd.unique(tmp_test[tmp_test['event_type']==2]['product_id'])) !=0:
+                set_test=set(pd.unique(tmp_test[tmp_test['event_type']==2]['product_id']))
+                set_onlyclick=set_test - set_ad
                 set_and=set_train & set_test
-                click_items+=1.0*len(set_train)/len(set_and)
+                set_and_onlyclick=set_train & set_onlyclick
+                if len(set_and) != 0:
+                    click_items+=1.0/len(set_test)*len(set_and)
+                if len(set_and_onlyclick) != 0:
+                    click_only+=1.0/len(set_onlyclick)*len(set_and_onlyclick)
                 click_count+=1
 
-            if len(pd.unique(tmp_train[tmp_train['event_type']==1])) !=0:
-                set_train=set(pd.unique(tmp_train[tmp_train['event_type']==1]['product_id']))
-                set_test=set(pd.unique(tmp_test[tmp_test['event_type']==1]))
+            if len(pd.unique(tmp_test[tmp_test['event_type']==1]['product_id'])) !=0:
+                set_test=set(pd.unique(tmp_test[tmp_test['event_type']==1]['product_id']))
+                set_onlyview=set_test - set_ad - set_onlyclick
                 set_and=set_train & set_test
-                view_items+=1.0*len(set_train)/len(set_and)
+                set_and_onlyview=set_train & set_onlyview
+                if len(set_and) != 0:
+                    view_items+=1.0/len(set_test)*len(set_and)
+                if len(set_and_onlyview) != 0:
+                    view_only+=1.0/len(set_onlyview)*len(set_and_onlyview)
                 view_count+=1
 
-        all_items/=all_count
-        conv_items/=conv_count
-        click_items/=click_count
-        view_items/=view_count
+            tmp_idcg=idcg[i]
+            del tmp_idcg['IDCG']
+            print(tmp_test)
+            print('------------------------------------')
+            print(tmp_idcg)
+
+            if len(tmp_idcg)!=0:
+                set_22=set(list(tmp_idcg.keys()))
+                set_and=set_train & set_22
+                top_22+=1.0*len(set_and)/len(set_22)
+                top_count+=1
+
+
+        if all_count!=0:
+            all_items/=all_count
+        if conv_count != 0:
+            conv_items/=conv_count
+            conv_ad/=conv_count
+        if click_count != 0:
+            click_items/=click_count
+            click_only/=click_count
+        if view_count != 0:
+            view_items/=view_count
+            view_only/=view_count
+        if top_count!=0:
+            top_22/=top_count
 
         print('Percentage of '+name)
-        print('All items : '+str(all_items))
-        print('Conv items : '+str(conv_items))
-        print('Click items : '+str(click_items))
-        print('View items : '+str(view_items))
+        print('All items : {:.2%}'.format(all_items))
+        print('Conv items : {:.2%}'.format(conv_items))
+        print('Conv items(ad only) : {:.2%}'.format(conv_ad))
+        print('Click items : {:.2%}'.format(click_items))
+        print('Click items(highest) : {:.2%}'.format(click_only))
+        print('View items : {:.2%}'.format(view_items))
+        print('View items(highest) : {:.2%}'.format(view_only))
+        print('top22 items : {:.2%}'.format(top_22))
 
 
 
 
 if __name__=='__main__':
-    #a=read_data('D')
-    #statistic_analysis(a,'B')
+    a=read_data('D')
+    statistic_analysis(a,'D')
     #extract_personaldata('D',a)
     #get_predict_ids()
-    check_persentage_of_items_in_test()
+    #check_persentage_of_items_in_test()

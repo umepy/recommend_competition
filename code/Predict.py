@@ -56,12 +56,35 @@ class Predict():
             predict_test[i] = [x for x, y in sorted_list]
         return predict_test
 
+    def method7_hybrid(self, name, test_ids):
+        predict_test = {}
+        for i in tqdm.tqdm(test_ids):
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[name][i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for k in self.personal_train[name][i][self.personal_train[name][i]['product_id'] == j]['event_type']:
+                    if k == 1:
+                        tmp_dict[j] += 3
+                    elif k == 0:
+                        tmp_dict[j] += 2
+                    elif k== 2:
+                        tmp_dict[j] += 1
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[i] = [x for x, y in sorted_list]
+        return predict_test
+
     def all_predict(self):
         print('予測開始します')
         predict_ids={}
         for i in ['A','B','C','D']:
             print(i)
-            predict_ids[i]=self.method6_ranked_view(i, self.submit_ids[i])
+            predict_ids[i]=self.method7_hybrid(i, self.submit_ids[i])
 
         submit_list=[]
         tmp_list=[]

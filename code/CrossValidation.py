@@ -203,14 +203,14 @@ class CrossValidation():
                 tmp_dict[j] = 0
                 for k in self.personal_train[i][self.personal_train[i]['product_id'] == j]['event_type']:
                     if k == 1:
-                        tmp_dict[j] += 100
+                        tmp_dict[j] += 3
                     elif k == 0:
-                        tmp_dict[j] += 10
+                        tmp_dict[j] += 2
                     elif k== 2:
                         tmp_dict[j] += 1
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
-            if len(sorted_list) > 4:
-                sorted_list = sorted_list[:4]
+            if len(sorted_list) > 5:
+                sorted_list = sorted_list[:5]
             predict_test[i] = [x for x, y in sorted_list]
         return self.evaluate(predict_test)
 

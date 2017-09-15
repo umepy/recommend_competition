@@ -7,12 +7,11 @@ from numba import jit
 import time
 import seaborn as sns
 import matplotlib.pyplot as plt
-from multiprocessing import Pool
 import tqdm
-from itertools import groupby
 import pickle
 import datetime
 from scipy import stats
+from scipy.sparse import lil_matrix
 
 # データ読み込み
 def read_data(name):
@@ -297,19 +296,22 @@ def create_evaluate_matrix_conversion(name):
 
     unique_product_ids = list(pd.unique(train_data['product_id']))
     unique_user_ids = list(pd.unique(train_data['user_id']))
+
     print(len(unique_product_ids))
     print(len(unique_user_ids))
 
-    ev_matrix=np.zeros((len(unique_user_ids),len(unique_product_ids)),dtype=np.int8)
+
+    ev_matrix=lil_matrix((len(unique_user_ids),len(unique_product_ids)))
     for user_id in tqdm.tqdm(unique_user_ids):
         for p_id in pd.unique(personal_data[user_id]['product_id']):
             ev_matrix[unique_user_ids.index(user_id),unique_product_ids.index(p_id)]=len(personal_data[user_id][personal_data[user_id]['event_type']==3])
 
-    df=pd.DataFrame(ev_matrix,columns=unique_product_ids)
-    df = df.assign(name=pd.Series(unique_user_ids))
+    save_dic={'user_id':unique_user_ids,'product_id':unique_product_ids}
 
     with open('../data/matrix/train_only_conversion_'+name+'.pickle', 'wb') as f:
-        pickle.dump(df, f)
+        pickle.dump(ev_matrix, f)
+    with open('../data/matrix/id_dic_only_conversion_'+name+'.pickle', 'wb') as f:
+        pickle.dump(save_dic, f)
 
 
 if __name__=='__main__':

@@ -134,5 +134,11 @@ extract_rankingをA,C,Dに対して実行 - 完
 * 評価行列はとてもスパースであり，とてもメモリに乗りきらない
 * とりあえず1人しか買ってない商品は除く
 
+## ユーザー数とアイテム数
+* A - 52,755人,  11,126 items
+* B - 21,379人,  16665 items
+* C - 37,513人,  277,113 items
+* D - 106,570人, 667,708 items
+
 ## 実行時の手順
 1. analysis/basic_statistic_analysis.pyのextract_allを実行(personalデータの作成)

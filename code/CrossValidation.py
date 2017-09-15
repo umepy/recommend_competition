@@ -214,6 +214,11 @@ class CrossValidation():
             predict_test[i] = [x for x, y in sorted_list]
         return self.evaluate(predict_test)
 
+    # item-base　の　協調フィルタリング
+    def method8_item_base(self,test_ids):
+        # item-baseの推薦は評価値行列の転置と評価値行列の内積で計算できる
+
+
     # Cross-validationの実行
     def CV(self):
         jobs=[]

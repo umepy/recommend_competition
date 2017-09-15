@@ -288,12 +288,34 @@ def check_persentage_of_items_in_test():
         print('View items(highest) : {:.2%}'.format(view_only))
         print('top22 items : {:.2%}'.format(top_22))
 
+# 訓練期間の評価値行列を作成(コンバージョンのみ)
+def create_evaluate_matrix_conversion(name):
+    train_data=read_data(name)
+    # 訓練期間のデータをフィルタ
+    train_data=train_data[train_data['time_stamp'] <= datetime.datetime(year=2017, month=4, day=24)]
+    personal_data=read_personal_train(name)
 
+    unique_product_ids = list(pd.unique(train_data['product_id']))
+    unique_user_ids = list(pd.unique(train_data['user_id']))
+    print(len(unique_product_ids))
+    print(len(unique_user_ids))
+
+    ev_matrix=np.zeros((len(unique_user_ids),len(unique_product_ids)),dtype=np.int8)
+    for user_id in tqdm.tqdm(unique_user_ids):
+        for p_id in pd.unique(personal_data[user_id]['product_id']):
+            ev_matrix[unique_user_ids.index(user_id),unique_product_ids.index(p_id)]=len(personal_data[user_id][personal_data[user_id]['event_type']==3])
+
+    df=pd.DataFrame(ev_matrix,columns=unique_product_ids)
+    df = df.assign(name=pd.Series(unique_user_ids))
+
+    with open('../data/matrix/train_only_conversion_'+name+'.pickle', 'wb') as f:
+        pickle.dump(df, f)
 
 
 if __name__=='__main__':
-    a=read_data('D')
-    statistic_analysis(a,'D')
+    #a=read_data('D')
+    #statistic_analysis(a,'D')
     #extract_personaldata('D',a)
     #get_predict_ids()
     #check_persentage_of_items_in_test()
+    create_evaluate_matrix_conversion('D')

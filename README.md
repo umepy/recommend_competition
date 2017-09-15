@@ -130,5 +130,9 @@ extract_rankingをA,C,Dに対して実行 - 完
 * 8 - 0.1411
 * 9 - 0.1455
 
+## 協調フィルタリングや非負値行列因子分解を行う時の問題
+* 評価行列はとてもスパースであり，とてもメモリに乗りきらない
+* とりあえず1人しか買ってない商品は除く
+
 ## 実行時の手順
 1. analysis/basic_statistic_analysis.pyのextract_allを実行(personalデータの作成)

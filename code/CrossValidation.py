@@ -12,7 +12,7 @@ import time
 from multiprocessing import Process,Pool,Manager
 from operator import itemgetter
 from sklearn.decomposition import NMF
-
+import tqdm
 
 class CrossValidation():
     def __init__(self,name,K=5,method=None):
@@ -239,8 +239,8 @@ class CrossValidation():
         train=self.sparse_data.tocsr()[slice_index,:]
         item_matrix=train.transpose().dot(train)
 
-        for i in range(len(tmp_train_ids)):
-            user_data=item_matrix.getrow(i).toarray()[0]
+        for i in tqdm.tqdm(range(len(tmp_train_ids))):
+            user_data=item_matrix.getrow(self.id_dic['user_id'].index(tmp_train_ids[i])).toarray()[0]
             c=zip(user_data,self.id_dic['product_id'])
             c=sorted(c,key=lambda x: x[0],reverse=True)
             sorted_list=list(zip(*c))[1]

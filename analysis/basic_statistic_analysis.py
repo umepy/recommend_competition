@@ -12,6 +12,7 @@ import pickle
 import datetime
 from scipy import stats
 from scipy.sparse import lil_matrix
+from sklearn.decomposition import NMF
 
 # データ読み込み
 def read_data(name):
@@ -313,6 +314,13 @@ def create_evaluate_matrix_conversion(name):
     with open('../data/matrix/id_dic_only_conversion_'+name+'.pickle', 'wb') as f:
         pickle.dump(save_dic, f)
 
+def myNMF(name):
+    with open('../data/matrix/train_only_conversion_'+name+'.pickle', 'rb') as f:
+        data=pickle.load(f)
+    model=NMF(n_components=3,random_state=0)
+    P=model.fit_transform(data)
+    Q=model.components_
+    print(data.transpose().dot(data))
 
 if __name__=='__main__':
     #a=read_data('D')
@@ -320,4 +328,5 @@ if __name__=='__main__':
     #extract_personaldata('D',a)
     #get_predict_ids()
     #check_persentage_of_items_in_test()
-    create_evaluate_matrix_conversion('D')
+    #create_evaluate_matrix_conversion('D')
+    myNMF('B')

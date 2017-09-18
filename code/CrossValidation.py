@@ -11,6 +11,7 @@ import random
 import time
 from multiprocessing import Process,Pool,Manager
 from operator import itemgetter
+from sklearn.decomposition import NMF
 
 
 class CrossValidation():
@@ -216,21 +217,37 @@ class CrossValidation():
                     elif k== 2:
                         tmp_dict[j] += 1
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
-            if len(sorted_list) > 5:
-                sorted_list = sorted_list[:5]
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
             predict_test[i] = [x for x, y in sorted_list]
         return self.evaluate(predict_test)
 
     # item-base　の　協調フィルタリング
     def method8_item_base(self,num):
+        train_ids = self.cv_trains[num]
         predict_test = {}
         # item-baseの推薦は評価値行列の転置と評価値行列の内積で計算できる
         # まず評価値行列から交差検定用行列を抽出する
         slice_index=[]
-        for i in test_ids:
+        tmp_train_ids=[]
+        for i in train_ids:
+            if i not in self.id_dic['user_id']:
+                continue
             slice_index.append(self.id_dic['user_id'].index(i))
+            tmp_train_ids.append(i)
 
-        #
+        train=self.sparse_data.tocsr()[slice_index,:]
+        item_matrix=train.transpose().dot(train)
+
+        for i in range(len(tmp_train_ids)):
+            user_data=item_matrix.getrow(i).toarray()[0]
+            c=zip(user_data,self.id_dic['product_id'])
+            c=sorted(c,key=lambda x: x[0],reverse=True)
+            sorted_list=list(zip(*c))[1]
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[tmp_train_ids[i]]=sorted_list
+        return self.evaluate(predict_test)
 
     # Cross-validationの実行
     def CV(self):
@@ -286,7 +303,7 @@ def all_CV(number=5,method=None):
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A','B','C','D']:
-            a=CrossValidation(i,K=1,method=method)
+            a=CrossValidation(i,K=5,method=method)
             scores[i]+=a.CV()
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:
@@ -306,4 +323,4 @@ def result_weight_mean(result):
 
 
 if __name__=='__main__':
-    all_CV(1,7)
+    all_CV(1,8)

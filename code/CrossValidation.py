@@ -67,7 +67,8 @@ class CrossValidation():
         return score/count
 
     # 方法1 - 過去のユーザの行動履歴から推薦(ランダム抽出推薦)
-    def method1_random_choice(self,test_ids):
+    def method1_random_choice(self,num):
+        test_ids=self.cv_tests[num]
         predict_test={}
         for i in test_ids:
             #ユニークitem idを取得
@@ -79,7 +80,8 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法2 - 過去のユーザの行動履歴から推薦(簡単な評価からの順位付け推薦)
-    def method2_ranked_choice(self, test_ids):
+    def method2_ranked_choice(self, num):
+        test_ids = self.cv_tests[num]
         predict_test = {}
         for i in test_ids:
             # ユニークitem idを取得
@@ -99,7 +101,8 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法3 - 過去のユーザの行動履歴から推薦(購買商品は推薦しない)
-    def method3_ranked_conversion_ignore_choice(self, test_ids):
+    def method3_ranked_conversion_ignore_choice(self, num):
+        test_ids = self.cv_tests[num]
         predict_test = {}
         for i in test_ids:
             # ユニークitem idを取得
@@ -122,7 +125,8 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法4 - カート商品を重視した順位付け
-    def method4_ranked_cart(self, test_ids):
+    def method4_ranked_cart(self, num):
+        test_ids = self.cv_tests[num]
         predict_test = {}
         for i in test_ids:
             # ユニークitem idを取得
@@ -145,7 +149,8 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法5 - クリックした商品を重視した順位付け
-    def method5_ranked_click(self, test_ids):
+    def method5_ranked_click(self, num):
+        test_ids = self.cv_tests[num]
         predict_test = {}
         for i in test_ids:
             # ユニークitem idを取得
@@ -168,7 +173,8 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法6 - 閲覧した商品を重視した順位付け
-    def method6_ranked_view(self, test_ids):
+    def method6_ranked_view(self, num):
+        test_ids = self.cv_tests[num]
         predict_test = {}
         for i in test_ids:
             # ユニークitem idを取得
@@ -191,7 +197,8 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法7 - 閲覧>カート>クリックで順位付け
-    def method7_hybrid(self, test_ids):
+    def method7_hybrid(self, num):
+        test_ids = self.cv_tests[num]
         predict_test = {}
         for i in test_ids:
             # ユニークitem idを取得
@@ -215,9 +222,15 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # item-base　の　協調フィルタリング
-    def method8_item_base(self,test_ids):
+    def method8_item_base(self,num):
+        predict_test = {}
         # item-baseの推薦は評価値行列の転置と評価値行列の内積で計算できる
+        # まず評価値行列から交差検定用行列を抽出する
+        slice_index=[]
+        for i in test_ids:
+            slice_index.append(self.id_dic['user_id'].index(i))
 
+        #
 
     # Cross-validationの実行
     def CV(self):
@@ -225,7 +238,7 @@ class CrossValidation():
         manager = Manager()
         score_dic = manager.dict()
         for i in range(self.K):
-            p = Process(target=self.do_method, args=(self.cv_tests[i],score_dic))
+            p = Process(target=self.do_method, args=(i,score_dic))
             jobs.append(p)
         [x.start() for x in jobs]
         [x.join() for x in jobs]
@@ -256,6 +269,12 @@ class CrossValidation():
             return self.method6_ranked_view
         elif num==7:
             return self.method7_hybrid
+        elif num==8:
+            with open('../data/matrix/train_only_conversion_' + self.name + '.pickle', 'rb') as f:
+                self.sparse_data=pickle.load(f)
+            with open('../data/matrix/id_dic_only_conversion_' + self.name + '.pickle', 'rb') as f:
+                self.id_dic=pickle.load(f)
+            return self.method8_item_base
 
 
 def work_CV(name,method):
@@ -267,7 +286,7 @@ def all_CV(number=5,method=None):
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A','B','C','D']:
-            a=CrossValidation(i,method=method)
+            a=CrossValidation(i,K=1,method=method)
             scores[i]+=a.CV()
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:

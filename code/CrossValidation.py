@@ -29,7 +29,10 @@ class CrossValidation():
             self.personal_result=pickle.load(f)
         with open('../data/personal/personal_train_' + self.name + '.pickle', 'rb') as f:
             self.personal_train=pickle.load(f)
-
+        with open('../data/matrix/train_only_conversion_' + self.name + '.pickle', 'rb') as f:
+            self.sparse_data = pickle.load(f)
+        with open('../data/matrix/id_dic_only_conversion_' + self.name + '.pickle', 'rb') as f:
+            self.id_dic = pickle.load(f)
     #データを分割
     def split_data(self):
         ran_ids=list(self.personal_train.keys())
@@ -224,29 +227,65 @@ class CrossValidation():
 
     # item-base　の　協調フィルタリング
     def method8_item_base(self,num):
-        train_ids = self.cv_trains[num]
+        test_ids = self.cv_tests[num]
         predict_test = {}
         # item-baseの推薦は評価値行列の転置と評価値行列の内積で計算できる
-        # まず評価値行列から交差検定用行列を抽出する
-        slice_index=[]
-        tmp_train_ids=[]
-        for i in train_ids:
-            if i not in self.id_dic['user_id']:
-                continue
-            slice_index.append(self.id_dic['user_id'].index(i))
-            tmp_train_ids.append(i)
-
-        train=self.sparse_data.tocsr()[slice_index,:]
+        train=self.sparse_data.tocsr()
         item_matrix=train.transpose().dot(train)
 
-        for i in tqdm.tqdm(range(len(tmp_train_ids))):
-            user_data=item_matrix.getrow(self.id_dic['user_id'].index(tmp_train_ids[i])).toarray()[0]
-            c=zip(user_data,self.id_dic['product_id'])
-            c=sorted(c,key=lambda x: x[0],reverse=True)
-            sorted_list=list(zip(*c))[1]
+        print('過去からの推薦を行います')
+        # 方法7を用いた商品推薦
+        predict_test = {}
+        for i in tqdm.tqdm(test_ids):
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for k in self.personal_train[i][self.personal_train[i]['product_id'] == j]['event_type']:
+                    if k == 1:
+                        tmp_dict[j] += 3
+                    elif k == 0:
+                        tmp_dict[j] += 2
+                    elif k == 2:
+                        tmp_dict[j] += 1
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
             if len(sorted_list) > 22:
                 sorted_list = sorted_list[:22]
-            predict_test[tmp_train_ids[i]]=sorted_list
+            predict_test[i] = [x for x, y in sorted_list]
+        print('過去からの推薦完了')
+        print('協調フィルタリング開始')
+        for i in tqdm.tqdm(test_ids):
+            # 過去からの推薦の各商品について
+            c_fil_items=[]
+            for j in predict_test[i]:
+                # itemの推薦順序を確保
+                item_base=list(item_matrix.getrow(self.id_dic['product_id'].index(j)).toarray()[0])
+                c_fil_items.append(self.id_dic['product_id'][item_base.index(max(item_base))])
+            predict_test[i].extend(c_fil_items)
+            if len(predict_test[i])>22:
+                predict_test[i]=predict_test[i][:22]
+        return self.evaluate(predict_test)
+
+    # item-base　の　協調フィルタリング
+    def method9_NMF_only(self, num):
+        test_ids = self.cv_tests[num]
+        predict_test = {}
+        # item-baseの推薦は評価値行列の転置と評価値行列の内積で計算できる
+        model = NMF(n_components=3)
+        user_feature_matrix=model.fit_transform(self.sparse_data)
+        item_feature_matrix=model.components_
+
+        for i in tqdm.tqdm(test_ids):
+            if i not in self.id_dic['user_id']:
+                continue
+            est_user_eval=np.dot(user_feature_matrix[self.id_dic['user_id'].index(i)],item_feature_matrix)
+            tmp=sorted(zip(est_user_eval,self.id_dic['product_id']),key=lambda x:x[0],reverse=True)
+            predict=list(zip(*tmp))[1]
+            predict=predict[:22]
+            predict_test[i]=predict
         return self.evaluate(predict_test)
 
     # Cross-validationの実行
@@ -287,11 +326,9 @@ class CrossValidation():
         elif num==7:
             return self.method7_hybrid
         elif num==8:
-            with open('../data/matrix/train_only_conversion_' + self.name + '.pickle', 'rb') as f:
-                self.sparse_data=pickle.load(f)
-            with open('../data/matrix/id_dic_only_conversion_' + self.name + '.pickle', 'rb') as f:
-                self.id_dic=pickle.load(f)
             return self.method8_item_base
+        elif num==9:
+            return self.method9_NMF_only
 
 
 def work_CV(name,method):
@@ -323,4 +360,4 @@ def result_weight_mean(result):
 
 
 if __name__=='__main__':
-    all_CV(1,8)
+    all_CV(1,9)

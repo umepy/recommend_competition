@@ -370,19 +370,42 @@ def all_evaluate_matrix_weighted(name):
     with open('../data/matrix/all_id_dic_weighted_'+name+'.pickle', 'wb') as f:
         pickle.dump(save_dic, f)
 
-def myNMF(name):
-    with open('../data/matrix/train_only_conversion_'+name+'.pickle', 'rb') as f:
-        data=pickle.load(f)
-    model=NMF(n_components=3,random_state=0)
-    P=model.fit_transform(data)
-    Q=model.components_
-    print(data.transpose().dot(data))
+# -----時間と推薦商品の関係の可視化-----
+def extract_time_and_past_items():
+    for name in ['A','B','C','D']:
+        train=read_personal_train(name)
+        test=read_personal_test(name)
+        idcg=read_personal_test_idcg(name)
+
+        # トレイン期間とテスト期間の商品の時間の差分
+        days=[]
+
+        # 各ユーザに対して
+        for user in tqdm.tqdm(idcg.keys()):
+            train_unique_items=pd.unique(train[user]['product_id'])
+            test_unique_items=pd.unique(test[user]['product_id'])
+            # どちらにも存在するitemを抽出
+            item_subset=set(train_unique_items) & set(test_unique_items)
+            for item in item_subset:
+                # テスト期間の一番早い時間
+                #test_min = test[user][test[user]['product_id']==item]['time_stamp'].min()
+                test_min=datetime.datetime(year=2017,month=4,day=24)
+                # トレイン期間の全イベントのndarrayを作成
+                train_ndarray=pd.to_datetime(train[user][train[user]['product_id']==item]['time_stamp'])-test_min
+                for i in train_ndarray:
+                    days.append(i.days)
+
+        with open('../data/view/time_teststart_'+str(name)+'.pickle','wb') as f:
+            pickle.dump(days,f)
+def view_time():
+    for name in ['A', 'B', 'C', 'D']:
+        with open('../data/view/time_' + str(name) + '.pickle', 'rb') as f:
+            data=pickle.load(f)
+        data=-1*np.array(data)
+        sns.distplot(data)
+        plt.show()
+
 
 if __name__=='__main__':
-    #a=read_data('D')
-    #statistic_analysis(a,'D')
-    #extract_personaldata('D',a)
-    #get_predict_ids()
-    #check_persentage_of_items_in_test()
-    #create_evaluate_matrix_conversion('D')
-    all_evaluate_matrix_weighted('D')
+    #view_time()
+    extract_time_and_past_items()

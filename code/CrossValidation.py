@@ -29,9 +29,9 @@ class CrossValidation():
             self.personal_result=pickle.load(f)
         with open('../data/personal/personal_train_' + self.name + '.pickle', 'rb') as f:
             self.personal_train=pickle.load(f)
-        with open('../data/matrix/train_only_conversion_' + self.name + '.pickle', 'rb') as f:
+        with open('../data/matrix/train_weighted_' + self.name + '.pickle', 'rb') as f:
             self.sparse_data = pickle.load(f)
-        with open('../data/matrix/id_dic_only_conversion_' + self.name + '.pickle', 'rb') as f:
+        with open('../data/matrix/id_dic_weighted_' + self.name + '.pickle', 'rb') as f:
             self.id_dic = pickle.load(f)
     #データを分割
     def split_data(self):
@@ -269,12 +269,12 @@ class CrossValidation():
                 predict_test[i]=predict_test[i][:22]
         return self.evaluate(predict_test)
 
-    # item-base　の　協調フィルタリング
-    def method9_NMF_only(self, num):
+    # NMFのみを用いた推薦
+    def method9_NMF_only(self, num,num2):
         test_ids = self.cv_tests[num]
         predict_test = {}
         # item-baseの推薦は評価値行列の転置と評価値行列の内積で計算できる
-        model = NMF(n_components=3)
+        model = NMF(n_components=num2)
         user_feature_matrix=model.fit_transform(self.sparse_data)
         item_feature_matrix=model.components_
 
@@ -289,12 +289,12 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # Cross-validationの実行
-    def CV(self):
+    def CV(self,num2):
         jobs=[]
         manager = Manager()
         score_dic = manager.dict()
         for i in range(self.K):
-            p = Process(target=self.do_method, args=(i,score_dic))
+            p = Process(target=self.do_method, args=(i,score_dic,num2))
             jobs.append(p)
         [x.start() for x in jobs]
         [x.join() for x in jobs]
@@ -302,8 +302,8 @@ class CrossValidation():
         return np.mean(list(score_dic.values()))
 
     # 並列計算用のCV関数
-    def do_method(self,data,dic):
-        result = self.method_func(data)
+    def do_method(self,data,dic,num2):
+        result = self.method_func(data,num2)
         dic[result] = result
 
     #メゾッド選択用関数
@@ -360,4 +360,6 @@ def result_weight_mean(result):
 
 
 if __name__=='__main__':
-    all_CV(1,9)
+   # all_CV(1,9)
+   a=CrossValidation('B',method=9)
+   print(a.CV(100))

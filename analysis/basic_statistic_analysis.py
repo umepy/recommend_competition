@@ -314,6 +314,62 @@ def create_evaluate_matrix_conversion(name):
     with open('../data/matrix/id_dic_only_conversion_'+name+'.pickle', 'wb') as f:
         pickle.dump(save_dic, f)
 
+# 訓練期間の評価値行列を作成(重み付け)
+def create_evaluate_matrix_weighted(name):
+    train_data=read_data(name)
+    # 訓練期間のデータをフィルタ
+    train_data=train_data[train_data['time_stamp'] <= datetime.datetime(year=2017, month=4, day=24)]
+    personal_data=read_personal_train(name)
+
+    unique_product_ids = list(pd.unique(train_data['product_id']))
+    unique_user_ids = list(pd.unique(train_data['user_id']))
+
+    ev_matrix=lil_matrix((len(unique_user_ids),len(unique_product_ids)))
+    for user_id in tqdm.tqdm(unique_user_ids):
+        for p_id in pd.unique(personal_data[user_id]['product_id']):
+            for k in personal_data[user_id][personal_data[user_id]['product_id'] == p_id]['event_type']:
+                if k==1:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += 3
+                elif k==0:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += 2
+                elif k==2:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += 1
+                print(k)
+
+    save_dic={'user_id':unique_user_ids,'product_id':unique_product_ids}
+
+    with open('../data/matrix/train_weighted_'+name+'.pickle', 'wb') as f:
+        pickle.dump(ev_matrix, f)
+    with open('../data/matrix/id_dic_weighted_'+name+'.pickle', 'wb') as f:
+        pickle.dump(save_dic, f)
+
+# 全期間の評価値行列を作成(重み付け)
+def all_evaluate_matrix_weighted(name):
+    train_data=read_data(name)
+    personal_data=read_personal_train(name)
+
+    unique_product_ids = list(pd.unique(train_data['product_id']))
+    unique_user_ids = list(pd.unique(train_data['user_id']))
+
+    ev_matrix=lil_matrix((len(unique_user_ids),len(unique_product_ids)))
+    for user_id in tqdm.tqdm(unique_user_ids):
+        for p_id in pd.unique(personal_data[user_id]['product_id']):
+            for k in personal_data[user_id][personal_data[user_id]['product_id'] == p_id]['event_type']:
+                if k==1:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += 3
+                elif k==0:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += 2
+                elif k==2:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += 1
+                print(k)
+
+    save_dic={'user_id':unique_user_ids,'product_id':unique_product_ids}
+
+    with open('../data/matrix/all_weighted_'+name+'.pickle', 'wb') as f:
+        pickle.dump(ev_matrix, f)
+    with open('../data/matrix/all_id_dic_weighted_'+name+'.pickle', 'wb') as f:
+        pickle.dump(save_dic, f)
+
 def myNMF(name):
     with open('../data/matrix/train_only_conversion_'+name+'.pickle', 'rb') as f:
         data=pickle.load(f)
@@ -329,4 +385,4 @@ if __name__=='__main__':
     #get_predict_ids()
     #check_persentage_of_items_in_test()
     #create_evaluate_matrix_conversion('D')
-    myNMF('B')
+    all_evaluate_matrix_weighted('D')

@@ -235,7 +235,6 @@ class CrossValidation():
         # なぜか上の演算でcscになっているのでcsrに治す
         item_matrix=item_matrix.tocsr()
 
-        print('過去からの推薦を行います')
         # 方法7を用いた商品推薦
         predict_test = {}
         for i in test_ids:
@@ -257,8 +256,6 @@ class CrossValidation():
             if len(sorted_list) > 11:
                 sorted_list = sorted_list[:11]
             predict_test[i] = [x for x, y in sorted_list]
-        print('過去からの推薦完了')
-        print('協調フィルタリング開始')
         for i in tqdm.tqdm(test_ids):
             # 過去からの推薦の各商品について
             c_fil_items=[]

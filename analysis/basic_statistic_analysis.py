@@ -13,6 +13,9 @@ import datetime
 from scipy import stats
 from scipy.sparse import lil_matrix
 from sklearn.decomposition import NMF
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import Pipeline
 
 # データ読み込み
 def read_data(name):
@@ -385,23 +388,73 @@ def extract_time_and_past_items():
             train_unique_items=pd.unique(train[user]['product_id'])
             test_unique_items=pd.unique(test[user]['product_id'])
             # どちらにも存在するitemを抽出
-            item_subset=set(train_unique_items) & set(test_unique_items)
+            #item_subset=set(train_unique_items) & set(test_unique_items)
+
+            # train期間におけるイベントの期間分布を調べる
+            item_subset=train_unique_items
+
             for item in item_subset:
                 # テスト期間の一番早い時間
                 #test_min = test[user][test[user]['product_id']==item]['time_stamp'].min()
+                # テスト開始期間に合わせる
                 test_min=datetime.datetime(year=2017,month=4,day=24)
+
                 # トレイン期間の全イベントのndarrayを作成
                 train_ndarray=pd.to_datetime(train[user][train[user]['product_id']==item]['time_stamp'])-test_min
                 for i in train_ndarray:
                     days.append(i.days)
 
-        with open('../data/view/time_teststart_'+str(name)+'.pickle','wb') as f:
+        with open('../data/view/time_all_train_teststart_'+str(name)+'.pickle','wb') as f:
             pickle.dump(days,f)
-def view_time():
+def view_time_fitting():
     for name in ['A', 'B', 'C', 'D']:
         with open('../data/view/time_teststart_' + str(name) + '.pickle', 'rb') as f:
             data=pickle.load(f)
         data=-1*np.array(data)
+        x=[]
+        y=[]
+        for i in data:
+            if i not in x:
+                x.append(i)
+                y.append(1)
+            else:
+                y[x.index(i)]+=1
+        y=np.array(y)/max(y)
+        # train a linear regression model
+        regr = Pipeline([
+            ('poly', PolynomialFeatures(degree=3)),
+            ('linear', LinearRegression())
+        ])
+        regr.fit(np.array(x).reshape((24,1)), np.array(y).reshape((24,1)))
+
+        # make predictions
+        xt = np.linspace(0.0, 30.0, num=100).reshape((100,1))
+        yt = regr.predict(xt)
+
+        # plot samples and regression result
+        plt.plot(x, y, 'o',label='Plot')
+        plt.plot(xt, yt,label='Fitting')
+        plt.title('Category_'+name)
+        plt.legend()
+        plt.xlabel('Days')
+        plt.ylabel('Importance')
+        plt.savefig('../data/view/fitting_'+name+'.png')
+        sns.distplot(data)
+        plt.show()
+def view_time():
+    for name in ['A', 'B', 'C', 'D']:
+        with open('../data/view/time_all_train_teststart_' + str(name) + '.pickle', 'rb') as f:
+            data=pickle.load(f)
+        data=-1*np.array(data)
+        x=[]
+        y=[]
+        for i in data:
+            if i not in x:
+                x.append(i)
+                y.append(1)
+            else:
+                y[x.index(i)]+=1
+        y=np.array(y)/max(y)
         sns.distplot(data)
         plt.show()
 

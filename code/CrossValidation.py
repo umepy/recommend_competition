@@ -53,9 +53,14 @@ class CrossValidation():
             return -1
         #まずDCGを計算
         DCG=0
-        for i in range(len(items)):
-            if items[i] in list(self.personal_result[user_id].keys()):
-                DCG+=(2**self.personal_result[user_id][items[i]]-1)/np.log2(i+2)
+        # 重複を除く
+        new_items=[]
+        for i in items:
+            if i not in new_items:
+                new_items.append(i)
+        for i in range(len(new_items)):
+            if new_items[i] in list(self.personal_result[user_id].keys()):
+                DCG+=(2**self.personal_result[user_id][new_items[i]]-1)/np.log2(i+2)
         return DCG/self.personal_result[user_id]['IDCG']
 
     #評価関数
@@ -265,8 +270,16 @@ class CrossValidation():
                 #item_base=item_matrix.getrow(t)
                 item_base = item_matrix[t]
                 item_base=item_base.toarray()[0]
-                item_base=item_base.argmax()
-                c_fil_items.append(self.id_dic['product_id'][item_base])
+                # 上位23件を持ってくる
+                ind = np.argpartition(item_base, -23)[-23:]
+                rec_item=None
+                for item in ind[np.argsort(item_base[ind])]:
+                    item=self.id_dic['product_id'][item]
+                    if item not in predict_test and item not in c_fil_items:
+                        rec_item=item
+                        break
+                assert rec_item!=None, 'No Recommend items'
+                c_fil_items.append(rec_item)
             predict_test[i].extend(c_fil_items)
             if len(predict_test[i])>22:
                 predict_test[i]=predict_test[i][:22]
@@ -345,7 +358,7 @@ def all_CV(number=5,method=None):
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A','B','C','D']:
-            a=CrossValidation(i,K=8,method=method)
+            a=CrossValidation(i,K=5,method=method)
             scores[i]+=a.CV_multi()
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:

@@ -399,7 +399,7 @@ def extract_time_and_past_items():
             pickle.dump(days,f)
 def view_time():
     for name in ['A', 'B', 'C', 'D']:
-        with open('../data/view/time_' + str(name) + '.pickle', 'rb') as f:
+        with open('../data/view/time_teststart_' + str(name) + '.pickle', 'rb') as f:
             data=pickle.load(f)
         data=-1*np.array(data)
         sns.distplot(data)
@@ -407,5 +407,5 @@ def view_time():
 
 
 if __name__=='__main__':
-    #view_time()
-    extract_time_and_past_items()
+    view_time()
+    #extract_time_and_past_items()

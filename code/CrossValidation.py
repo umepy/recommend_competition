@@ -330,11 +330,6 @@ class CrossValidation():
         elif num==9:
             return self.method9_NMF_only
 
-
-def work_CV(name):
-    a=CrossValidation(name)
-    a.CV()
-
 def all_CV(number=5,method=None):
     print('CV開始いたします')
     scores={'A':0,'B':0,'C':0,'D':0}

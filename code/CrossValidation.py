@@ -13,6 +13,7 @@ from multiprocessing import Process,Pool,Manager
 from operator import itemgetter
 from sklearn.decomposition import NMF
 import tqdm
+import math
 
 class CrossValidation():
     def __init__(self,name,K=5,method=None):
@@ -29,9 +30,9 @@ class CrossValidation():
             self.personal_result=pickle.load(f)
         with open('../data/personal/personal_train_' + self.name + '.pickle', 'rb') as f:
             self.personal_train=pickle.load(f)
-        with open('../data/matrix/train_weighted_' + self.name + '.pickle', 'rb') as f:
+        with open('../data/matrix/train_only_conversion_' + self.name + '.pickle', 'rb') as f:
             self.sparse_data = pickle.load(f)
-        with open('../data/matrix/id_dic_weighted_' + self.name + '.pickle', 'rb') as f:
+        with open('../data/matrix/id_dic_only_conversion_' + self.name + '.pickle', 'rb') as f:
             self.id_dic = pickle.load(f)
     #データを分割
     def split_data(self):
@@ -233,16 +234,16 @@ class CrossValidation():
     # 方法8 - item-base　の　協調フィルタリング
     def method8_item_base(self,num):
         test_ids = self.cv_tests[num]
-        predict_test = {}
         # item-baseの推薦は評価値行列の転置と評価値行列の内積で計算できる
         train=self.sparse_data.tocsr()
         item_matrix=train.transpose().dot(train)
         # なぜか上の演算でcscになっているのでcsrに治す
         item_matrix=item_matrix.tocsr()
+        sorted_list = None
 
         # 方法7を用いた商品推薦
         predict_test = {}
-        for i in test_ids:
+        for i in tqdm.tqdm(test_ids):
             # ユニークitem idを取得
             tmp_dict = {}
             past_items = pd.unique(self.personal_train[i]['product_id'])
@@ -258,31 +259,36 @@ class CrossValidation():
                     elif k == 2:
                         tmp_dict[j] += 1
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
-            if len(sorted_list) > 11:
-                sorted_list = sorted_list[:11]
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
             predict_test[i] = [x for x, y in sorted_list]
-        for i in tqdm.tqdm(test_ids):
-            # 過去からの推薦の各商品について
-            c_fil_items=[]
-            for j in predict_test[i]:
-                # itemの推薦順序を確保
-                t=self.id_dic['product_id'].index(j)
-                #item_base=item_matrix.getrow(t)
-                item_base = item_matrix[t]
-                item_base=item_base.toarray()[0]
-                # 上位23件を持ってくる
-                ind = np.argpartition(item_base, -23)[-23:]
-                rec_item=None
-                for item in ind[np.argsort(item_base[ind])]:
-                    item=self.id_dic['product_id'][item]
-                    if item not in predict_test and item not in c_fil_items:
-                        rec_item=item
-                        break
-                assert rec_item!=None, 'No Recommend items'
-                c_fil_items.append(rec_item)
-            predict_test[i].extend(c_fil_items)
-            if len(predict_test[i])>22:
-                predict_test[i]=predict_test[i][:22]
+
+            # 過去の推薦個数が22に満たなければ
+            if len(predict_test[i])<22 and len(predict_test[i])>0:
+                c_fil_num=int(1+math.floor((22-len(predict_test[i]))/len(predict_test[i])))
+                # 過去からの推薦の各商品について
+                c_fil_items=[]
+                for j in predict_test[i]:
+                    # itemの推薦順序を確保
+                    t=self.id_dic['product_id'].index(j)
+                    #item_base=item_matrix.getrow(t)
+                    item_base = item_matrix[t]
+                    item_base=item_base.toarray()[0]
+                    # 上位23件を持ってくる
+                    ind = np.argpartition(item_base, int(-23*c_fil_num))[int(-23*c_fil_num):]
+                    rec_item = []
+                    # 降順に並べ替えて（今まで昇順でやってた・・・・・・・・・）
+                    for item in ind[np.argsort(item_base[ind])[::-1]]:
+                        item=self.id_dic['product_id'][item]
+                        if item not in predict_test and item not in c_fil_items:
+                            rec_item.append(item)
+                        if len(rec_item)==c_fil_num:
+                            break
+                    #assert len(rec_item)!=c_fil_num, 'No Recommend items'
+                    c_fil_items.extend(rec_item)
+                predict_test[i].extend(c_fil_items)
+                if len(predict_test[i])>22:
+                    predict_test[i]=predict_test[i][:22]
         return self.evaluate(predict_test)
 
     # 方法9 - NMFのみを用いた推薦

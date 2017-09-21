@@ -232,11 +232,13 @@ class CrossValidation():
         # item-baseの推薦は評価値行列の転置と評価値行列の内積で計算できる
         train=self.sparse_data.tocsr()
         item_matrix=train.transpose().dot(train)
+        # なぜか上の演算でcscになっているのでcsrに治す
+        item_matrix=item_matrix.tocsr()
 
         print('過去からの推薦を行います')
         # 方法7を用いた商品推薦
         predict_test = {}
-        for i in tqdm.tqdm(test_ids):
+        for i in test_ids:
             # ユニークitem idを取得
             tmp_dict = {}
             past_items = pd.unique(self.personal_train[i]['product_id'])
@@ -262,8 +264,12 @@ class CrossValidation():
             c_fil_items=[]
             for j in predict_test[i]:
                 # itemの推薦順序を確保
-                item_base=list(item_matrix.getrow(self.id_dic['product_id'].index(j)).toarray()[0])
-                c_fil_items.append(self.id_dic['product_id'][item_base.index(max(item_base))])
+                t=self.id_dic['product_id'].index(j)
+                #item_base=item_matrix.getrow(t)
+                item_base = item_matrix[t]
+                item_base=item_base.toarray()[0]
+                item_base=item_base.argmax()
+                c_fil_items.append(self.id_dic['product_id'][item_base])
             predict_test[i].extend(c_fil_items)
             if len(predict_test[i])>22:
                 predict_test[i]=predict_test[i][:22]
@@ -289,7 +295,7 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # Cross-validationの実行
-    def CV(self):
+    def CV_multi(self):
         jobs=[]
         manager = Manager()
         score_dic = manager.dict()
@@ -300,6 +306,13 @@ class CrossValidation():
         [x.join() for x in jobs]
         print('Score '+ self.name +' : {0}'.format(np.mean(list(score_dic.values()))))
         return np.mean(list(score_dic.values()))
+
+    # Cross-validationの実行
+    def CV_normal(self):
+        for i in range(self.K):
+            a=self.method_func(i)
+        print('Score ' + self.name + ' : {0}'.format(a))
+        return a
 
     # 並列計算用のCV関数
     def do_method(self,data,dic):
@@ -335,8 +348,8 @@ def all_CV(number=5,method=None):
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A','B','C','D']:
-            a=CrossValidation(i,K=5,method=method)
-            scores[i]+=a.CV()
+            a=CrossValidation(i,K=8,method=method)
+            scores[i]+=a.CV_multi()
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:
         scores[i]/=number
@@ -355,4 +368,4 @@ def result_weight_mean(result):
 
 
 if __name__=='__main__':
-   all_CV(1,8)
+    all_CV(1,8)

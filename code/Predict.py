@@ -87,6 +87,7 @@ class Predict():
         return predict_test
 
     def method8_itembase(self, name, test_ids):
+        go_num=0
         predict_test = {}
         train = self.sparse_data[name].tocsr()
         item_matrix = train.transpose().dot(train)
@@ -109,12 +110,13 @@ class Predict():
                     elif k == 2:
                         tmp_dict[j] += 1
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
-            if len(sorted_list) > 11:
-                sorted_list = sorted_list[:11]
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
             predict_test[i] = [x for x, y in sorted_list]
 
             # 過去の推薦個数が22に満たなければ
             if len(predict_test[i]) < 22 and len(predict_test[i]) > 0:
+                go_num+=1
                 c_fil_num = int(1 + math.floor((22 - len(predict_test[i])) / len(predict_test[i])))
                 # 過去からの推薦の各商品について
                 c_fil_items = []
@@ -139,6 +141,7 @@ class Predict():
                 predict_test[i].extend(c_fil_items)
                 if len(predict_test[i]) > 22:
                     predict_test[i] = predict_test[i][:22]
+            print(go_num)
         return predict_test
 
     def all_predict(self):

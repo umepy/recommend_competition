@@ -310,6 +310,35 @@ class CrossValidation():
             predict_test[i]=predict
         return self.evaluate(predict_test)
 
+    # 方法10 - 方法7に時間重みを加えた推薦法
+    def method10_time_weight(self, num):
+        with open('../data/time_weight/fitting_balanced_' + self.name + '.pickle', 'rb') as f:
+            time_weight=pickle.load(f)
+        test_min = datetime.datetime(year=2017, month=4, day=24)
+        test_ids = self.cv_tests[num]
+        predict_test = {}
+        for i in test_ids:
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for _,row in self.personal_train[i][self.personal_train[i]['product_id'] == j].iterrows():
+                    if row['event_type'] == 1:
+                        tmp_dict[j] += 3 * time_weight[-1*(row['time_stamp']-test_min).days]
+                    elif row['event_type'] == 0:
+                        tmp_dict[j] += 2 * time_weight[-1*(row['time_stamp']-test_min).days]
+                    elif row['event_type'] == 2:
+                        tmp_dict[j] += 1 * time_weight[-1*(row['time_stamp']-test_min).days]
+
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[i] = [x for x, y in sorted_list]
+        return self.evaluate(predict_test)
+
     # Cross-validationの実行
     def CV_multi(self):
         jobs=[]
@@ -358,6 +387,8 @@ class CrossValidation():
             return self.method8_item_base
         elif num==9:
             return self.method9_NMF_only
+        elif num == 10:
+            return self.method10_time_weight
 
 def all_CV(number=5,method=None):
     print('CV開始いたします')
@@ -384,4 +415,4 @@ def result_weight_mean(result):
 
 
 if __name__=='__main__':
-    all_CV(1,8)
+    all_CV(1,10)

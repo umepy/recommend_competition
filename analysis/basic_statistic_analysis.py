@@ -406,19 +406,31 @@ def extract_time_and_past_items():
 
         with open('../data/view/time_all_train_teststart_'+str(name)+'.pickle','wb') as f:
             pickle.dump(days,f)
-def view_time_fitting():
+def view_time_fitting(balance):
     for name in ['A', 'B', 'C', 'D']:
         with open('../data/view/time_teststart_' + str(name) + '.pickle', 'rb') as f:
             data=pickle.load(f)
+        with open('../data/view/time_all_train_teststart_' + str(name) + '.pickle', 'rb') as f:
+            all_data = pickle.load(f)
         data=-1*np.array(data)
+        all_data = -1 * np.array(all_data)
         x=[]
         y=[]
+        all_y=[]
         for i in data:
             if i not in x:
                 x.append(i)
                 y.append(1)
+                all_y.append(0)
             else:
                 y[x.index(i)]+=1
+        if balance:
+            for i in all_data:
+                if i in x:
+                    all_y[x.index(i)] += 1
+            all_y=np.array(all_y)/max(all_y)
+            for i in range(len(y)):
+                y[i]/=all_y[i]
         y=np.array(y)/max(y)
         # train a linear regression model
         regr = Pipeline([
@@ -431,6 +443,23 @@ def view_time_fitting():
         xt = np.linspace(0.0, 30.0, num=100).reshape((100,1))
         yt = regr.predict(xt)
 
+        # 重み曲線の出力
+        if balance:
+            days=[]
+            for i in range(35):
+                days.append(i)
+            a=regr.predict(np.array(days).reshape((35,1)))
+            output=[]
+            for i in a:
+                if i > 1:
+                    output.append(1)
+                elif i <0.1:
+                    output.append(0.1)
+                else:
+                    output.append(i[0])
+            with open('../data/time_weight/fitting_balanced_' + name + '.pickle','wb') as f:
+                pickle.dump(output,f)
+
         # plot samples and regression result
         plt.plot(x, y, 'o',label='Plot')
         plt.plot(xt, yt,label='Fitting')
@@ -438,7 +467,10 @@ def view_time_fitting():
         plt.legend()
         plt.xlabel('Days')
         plt.ylabel('Importance')
-        plt.savefig('../data/view/fitting_'+name+'.png')
+        if balance:
+            plt.savefig('../data/view/fitting_balanced_' + name + '.png')
+        else:
+            plt.savefig('../data/view/fitting_'+name+'.png')
         sns.distplot(data)
         plt.show()
 def view_time():
@@ -456,9 +488,11 @@ def view_time():
                 y[x.index(i)]+=1
         y=np.array(y)/max(y)
         sns.distplot(data)
+        plt.savefig('../data/view/time_all_train_' + str(name) + '.png')
         plt.show()
 
 
 if __name__=='__main__':
-    view_time()
+    #view_time()
     #extract_time_and_past_items()
+    view_time_fitting(True)

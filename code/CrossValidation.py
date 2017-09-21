@@ -225,7 +225,7 @@ class CrossValidation():
             predict_test[i] = [x for x, y in sorted_list]
         return self.evaluate(predict_test)
 
-    # item-base　の　協調フィルタリング
+    # 方法8 - item-base　の　協調フィルタリング
     def method8_item_base(self,num):
         test_ids = self.cv_tests[num]
         predict_test = {}
@@ -269,7 +269,7 @@ class CrossValidation():
                 predict_test[i]=predict_test[i][:22]
         return self.evaluate(predict_test)
 
-    # NMFのみを用いた推薦
+    # 方法9 - NMFのみを用いた推薦
     def method9_NMF_only(self, num):
         test_ids = self.cv_tests[num]
         predict_test = {}

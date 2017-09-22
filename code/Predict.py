@@ -10,6 +10,7 @@ from numba import jit
 from operator import itemgetter
 import tqdm
 import math
+import datetime
 
 class Predict():
     def __init__(self):
@@ -144,12 +145,40 @@ class Predict():
             print(go_num)
         return predict_test
 
+    # 方法10 - 方法7に時間重みを加えた推薦法
+    def method10_time_weight(self, name, test_ids):
+        with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
+            time_weight = pickle.load(f)
+        test_min = datetime.datetime(year=2017, month=5, day=1)
+        predict_test = {}
+        for i in tqdm.tqdm(test_ids):
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[name][i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for _, row in self.personal_train[name][i][self.personal_train[name][i]['product_id'] == j].iterrows():
+                    if row['event_type'] == 1:
+                        tmp_dict[j] += 3 * time_weight[-1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 0:
+                        tmp_dict[j] += 2 * time_weight[-1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 2:
+                        tmp_dict[j] += 1 * time_weight[-1 * (row['time_stamp'] - test_min).days]
+
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[i] = [x for x, y in sorted_list]
+        return predict_test
+
     def all_predict(self):
         print('予測開始します')
         predict_ids={}
         for i in ['A','B','C','D']:
             print(i)
-            predict_ids[i]=self.method8_itembase(i, self.submit_ids[i])
+            predict_ids[i]=self.method10_time_weight(i, self.submit_ids[i])
 
         submit_list=[]
         for i in ['A','B','C','D']:

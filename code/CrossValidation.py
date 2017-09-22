@@ -317,7 +317,7 @@ class CrossValidation():
         test_min = datetime.datetime(year=2017, month=4, day=24)
         test_ids = self.cv_tests[num]
         predict_test = {}
-        for i in test_ids:
+        for i in tqdm.tqdm(test_ids):
             # ユニークitem idを取得
             tmp_dict = {}
             past_items = pd.unique(self.personal_train[i]['product_id'])

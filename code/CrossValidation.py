@@ -415,4 +415,4 @@ def result_weight_mean(result):
 
 
 if __name__=='__main__':
-    all_CV(1,10)
+    all_CV(1,9)

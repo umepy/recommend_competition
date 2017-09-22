@@ -159,6 +159,8 @@ NMFの要素数
 ## 推薦用ライブラリ
 * Surprise - 様ざまな推薦手法が入ったもの
 * pyFM - Factalization Machineに特化したライブラリ
+* fastFM - scikit-learn風に書くFactorization Machineライブラリ．コアの計算はC実装のライブラリで高速化．
+* pywFM - Steffen RendleのlibFMのPythonラッパー
 
 ## ユーザー数とアイテム数
 * A - 52,755人,  11,126 items

@@ -30,9 +30,9 @@ class CrossValidation():
             self.personal_result=pickle.load(f)
         with open('../data/personal/personal_train_' + self.name + '.pickle', 'rb') as f:
             self.personal_train=pickle.load(f)
-        with open('../data/matrix/train_only_conversion_' + self.name + '.pickle', 'rb') as f:
+        with open('../data/matrix/train_time_weighted_' + self.name + '.pickle', 'rb') as f:
             self.sparse_data = pickle.load(f)
-        with open('../data/matrix/id_dic_only_conversion_' + self.name + '.pickle', 'rb') as f:
+        with open('../data/matrix/id_dic_time_weighted_' + self.name + '.pickle', 'rb') as f:
             self.id_dic = pickle.load(f)
     #データを分割
     def split_data(self):
@@ -75,6 +75,17 @@ class CrossValidation():
             else:
                 score+=tmp
         return score/count
+
+    #含有率を調査する関数
+    def analysis_content(self, predict,important):
+        output=[]
+        for user_id in predict.keys():
+            for item in predict[user_id]:
+                # もしtest期間に含まれていれば
+                if item in list(self.personal_result[user_id].keys()):
+                    output.append(important)
+        with open('../data/view/analysis_content_'+self.name+'.pickle','wb') as f:
+            pickle.dump(output,f)
 
     # 方法1 - 過去のユーザの行動履歴から推薦(ランダム抽出推薦)
     def method1_random_choice(self,num):
@@ -317,6 +328,7 @@ class CrossValidation():
         test_min = datetime.datetime(year=2017, month=4, day=24)
         test_ids = self.cv_tests[num]
         predict_test = {}
+        importance={}
         for i in tqdm.tqdm(test_ids):
             # ユニークitem idを取得
             tmp_dict = {}
@@ -337,6 +349,7 @@ class CrossValidation():
             if len(sorted_list) > 22:
                 sorted_list = sorted_list[:22]
             predict_test[i] = [x for x, y in sorted_list]
+            importance[i] = [y for x, y in sorted_list]
         return self.evaluate(predict_test)
 
     # Cross-validationの実行

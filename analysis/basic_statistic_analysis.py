@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from numba import jit
 import time
+import math
 import seaborn as sns
 import matplotlib.pyplot as plt
 import tqdm
@@ -508,8 +509,11 @@ def view_time_fitting(balance):
         plt.show()
 def view_time():
     for name in ['A', 'B', 'C', 'D']:
+        with open('../data/view/time_teststart_' + str(name) + '.pickle', 'rb') as f:
+            test_number = pickle.load(f)
         with open('../data/view/time_all_train_teststart_' + str(name) + '.pickle', 'rb') as f:
             data=pickle.load(f)
+        test_number = -1 * np.array(test_number)
         data=-1*np.array(data)
         x=[]
         y=[]
@@ -521,11 +525,89 @@ def view_time():
                 y[x.index(i)]+=1
         y=np.array(y)/max(y)
         sns.distplot(data)
+        plt.xlabel('days')
+        plt.ylabel('amount')
+        plt.title('Distribution of '+name)
         plt.savefig('../data/view/time_all_train_' + str(name) + '.png')
         plt.show()
+        plt.xlabel('days')
+        plt.ylabel('amount')
+        plt.title('Distribution of ' + name)
+        sns.distplot(test_number)
+        plt.savefig('../data/view/time_train_' + str(name) + '.png')
+        plt.show()
+
+def connect_content():
+    for name in ['A','B','C','D']:
+        output = {}
+        for i in range(1,6):
+            with open('../data/view/analysis_content_'+name+str(i)+'.pickle','rb') as f:
+                data=pickle.load(f)
+            output.update(data)
+        with open('../data/view/analysis_content_' + name+'.pickle', 'wb') as f:
+            pickle.dump(output,f)
+
+# -----含有率の分析-----
+def analysis_content(view):
+    if not view:
+        for name in ['A', 'B', 'C', 'D']:
+            with open('../data/personal/personal_test_items_IDCG_' + name + '.pickle', 'rb') as f:
+                IDCG = pickle.load(f)
+            with open('../data/view/analysis_content_' + name + '.pickle', 'rb') as f:
+                data=pickle.load(f)
+            #items, importance
+            #もし入っていたらリストに重度度追加
+            output=[]
+            # 0.01刻みで10-0の範囲
+            division_true = np.zeros(1000)
+            division_false = np.zeros(1000)
+            for user in tqdm.tqdm(data.keys()):
+                importance = np.array(data[user]['importance'])
+
+                if len(importance)==0:
+                    continue
+                #importance = (importance - np.mean(importance))/np.std(importance)
+                for i in range(len(data[user]['items'])):
+                    if data[user]['items'][i] in IDCG[user]:
+                        if np.isnan(importance[i])==False:
+                            tmp = math.floor(importance[i] )
+                            if tmp >= 1000:
+                                tmp = 999
+                            if tmp < 0:
+                                tmp = 0
+                            division_true[tmp]+=1
+                            output.append(importance[i])
+                    else:
+                        if np.isnan(importance[i]) == False:
+                            tmp=math.floor(importance[i])
+                            if tmp>=1000:
+                                tmp=999
+                            if tmp<0:
+                                tmp=0
+                            division_false[tmp] += 1
+            # 逆順にして累積和をとる
+            division_true = np.cumsum(division_true[::-1])[::-1]
+            division_false = np.cumsum(division_false[::-1])[::-1]
+            div_final=division_true/(division_true+division_false)*100
+            with open('../data/view/importance_' + name + '.pickle', 'wb') as f:
+                pickle.dump(div_final,f)
+            with open('../data/view/importance_distribution_'+name+'.pickle','wb') as f:
+                pickle.dump(output,f)
+    else:
+        for name in ['A', 'B', 'C', 'D']:
+            with open('../data/view/importance_' + name + '.pickle', 'rb') as f:
+                data=pickle.load(f)
+            x=np.linspace(0,1000,1000)
+            plt.plot(x,data)
+            plt.title('A relationship between including percentage and importance of '+name)
+            plt.xlabel('importance')
+            plt.ylabel('including percentage')
+            plt.show()
 
 
 if __name__=='__main__':
     #view_time()
     #extract_time_and_past_items()
-    create_evaluate_matrix_time_weighted('D')
+    #create_evaluate_matrix_time_weighted('D')
+    #analysis_content(False)
+    analysis_content(True)

@@ -604,10 +604,23 @@ def analysis_content(view):
             plt.ylabel('including percentage')
             plt.show()
 
+# 各要素数のNMFの結果を保存する関数
+def nmf_save(components):
+    for name in ['A','B','C']:
+        with open('../data/matrix/train_time_weighted_' + name + '.pickle', 'rb') as f:
+            sparse_data = pickle.load(f)
+        model=NMF(n_components=components,verbose=True)
+        user=model.fit_transform(sparse_data)
+        item=model.components_
+        print('component='+str(components))
+        with open('../data/nmf/nmf_user_'+str(components)+'_'+name+'.pickle','wb') as f:
+            pickle.dump(user,f)
+        with open('../data/nmf/nmf_item_'+str(components)+'_'+name+'.pickle','wb') as f:
+            pickle.dump(item,f)
 
 if __name__=='__main__':
     #view_time()
     #extract_time_and_past_items()
     #create_evaluate_matrix_time_weighted('D')
     #analysis_content(False)
-    analysis_content(True)
+    #analysis_content(True)

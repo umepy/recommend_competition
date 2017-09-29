@@ -602,10 +602,13 @@ def analysis_content(view):
             plt.title('A relationship between including percentage and importance of '+name)
             plt.xlabel('importance')
             plt.ylabel('including percentage')
+            plt.tight_layout()
+            plt.savefig('../data/view/importance_including_rate_'+name+'.png')
             plt.show()
 
 # 各要素数のNMFの結果を保存する関数
 def nmf_save(components):
+    print('component=' + str(components))
     for name in ['A','B','C']:
         with open('../data/matrix/train_time_weighted_' + name + '.pickle', 'rb') as f:
             sparse_data = pickle.load(f)
@@ -618,9 +621,31 @@ def nmf_save(components):
         with open('../data/nmf/nmf_item_'+str(components)+'_'+name+'.pickle','wb') as f:
             pickle.dump(item,f)
 
+# NMFが推薦した商品の含有率を調べる
+def nmf_analysis(name,components):
+    with open('../data/nmf/nmf_user_' + str(components) + '_' + name + '.pickle', 'rb') as f:
+        user_feature=pickle.load(f)
+    with open('../data/nmf/nmf_item_' + str(components) + '_' + name + '.pickle', 'rb') as f:
+        item_feature=pickle.load(f)
+    with open('../data/matrix/train_time_weighted_' + name + '.pickle', 'rb') as f:
+        sparse_data = pickle.load(f)
+    with open('../data/matrix/id_dic_time_weighted_' + name + '.pickle', 'rb') as f:
+        id_dic = pickle.load(f)
+    print(type(item_feature))
+    for user in id_dic['user_id']:
+        est_user_eval=np.dot(user_feature[id_dic['user_id'].index(user)],item_feature)
+        tmp = sorted(zip(est_user_eval, id_dic['product_id']), key=lambda x: x[0], reverse=True)
+        predict = list(zip(*tmp))[1]
+        out_list=[]
+        for i in predict:
+            if True:
+                pass
+
 if __name__=='__main__':
     #view_time()
     #extract_time_and_past_items()
     #create_evaluate_matrix_time_weighted('D')
     #analysis_content(False)
     #analysis_content(True)
+    #nmf_save(800)
+    nmf_analysis('A',100)

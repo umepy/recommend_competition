@@ -17,6 +17,7 @@ from sklearn.decomposition import NMF
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import Pipeline
+import cudamat as cm
 
 # データ読み込み
 def read_data(name):
@@ -348,7 +349,7 @@ def create_evaluate_matrix_weighted(name):
     with open('../data/matrix/id_dic_weighted_'+name+'.pickle', 'wb') as f:
         pickle.dump(save_dic, f)
 
-# 訓練期間の評価値行列を作成(重み付け)
+# 訓練期間の評価値行列を作成(時間重み付け)
 def create_evaluate_matrix_time_weighted(name):
     train_data = read_data(name)
     # 時間減衰を読み込み
@@ -405,6 +406,38 @@ def all_evaluate_matrix_weighted(name):
     with open('../data/matrix/all_weighted_'+name+'.pickle', 'wb') as f:
         pickle.dump(ev_matrix, f)
     with open('../data/matrix/all_id_dic_weighted_'+name+'.pickle', 'wb') as f:
+        pickle.dump(save_dic, f)
+
+# 全期間の評価値行列を作成(重み付け)
+def all_evaluate_matrix_time_weighted(name):
+    train_data = read_data(name)
+    # 時間減衰を読み込み
+    with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
+        time_weight = pickle.load(f)
+    test_min = datetime.datetime(year=2017, month=5, day=1)
+    personal_data = read_personal_train(name)
+
+    unique_product_ids = list(pd.unique(train_data['product_id']))
+    unique_user_ids = list(pd.unique(train_data['user_id']))
+
+    ev_matrix = lil_matrix((len(unique_user_ids), len(unique_product_ids)))
+    for user_id in tqdm.tqdm(unique_user_ids):
+        for p_id in pd.unique(personal_data[user_id]['product_id']):
+            for _, row in personal_data[user_id][personal_data[user_id]['product_id'] == p_id].iterrows():
+                if row['event_type'] == 1:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += 3 * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 0:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += 2 * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 2:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += 1 * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+
+    save_dic = {'user_id': unique_user_ids, 'product_id': unique_product_ids}
+    with open('../data/matrix/all_time_weighted_' + name + '.pickle', 'wb') as f:
+        pickle.dump(ev_matrix, f)
+    with open('../data/matrix/all_id_dic_time_weighted_' + name + '.pickle', 'wb') as f:
         pickle.dump(save_dic, f)
 
 # -----時間と推薦商品の関係の可視化-----
@@ -623,23 +656,34 @@ def nmf_save(components):
 
 # NMFが推薦した商品の含有率を調べる
 def nmf_analysis(name,components):
+    # GPUを用いて行列演算（初期化）
+    cm.cuda_set_device(0)
+    cm.init()
+
     with open('../data/nmf/nmf_user_' + str(components) + '_' + name + '.pickle', 'rb') as f:
         user_feature=pickle.load(f)
     with open('../data/nmf/nmf_item_' + str(components) + '_' + name + '.pickle', 'rb') as f:
         item_feature=pickle.load(f)
     with open('../data/matrix/train_time_weighted_' + name + '.pickle', 'rb') as f:
-        sparse_data = pickle.load(f)
+        sparse_data = pickle.load(f).tocsc()
     with open('../data/matrix/id_dic_time_weighted_' + name + '.pickle', 'rb') as f:
         id_dic = pickle.load(f)
-    print(type(item_feature))
-    for user in id_dic['user_id']:
-        est_user_eval=np.dot(user_feature[id_dic['user_id'].index(user)],item_feature)
+    nmf_result=cm.dot(cm.CUDAMatrix(user_feature),cm.CUDAMatrix(item_feature)).asarray()
+    for user in tqdm.tqdm(id_dic['user_id']):
+        index_user=id_dic['user_id'].index(user)
+        #est_user_eval=np.dot(user_feature[id_dic['user_id'].index(user)],item_feature)
+        est_user_eval=nmf_result[index_user]
         tmp = sorted(zip(est_user_eval, id_dic['product_id']), key=lambda x: x[0], reverse=True)
         predict = list(zip(*tmp))[1]
         out_list=[]
         for i in predict:
-            if True:
-                pass
+            index_item = id_dic['product_id'].index(i)
+            if sparse_data[index_user,index_item]==0:
+                out_list.append(i)
+
+# FM用のデータの作成
+def fm_datacreate():
+
 
 if __name__=='__main__':
     #view_time()

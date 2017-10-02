@@ -14,6 +14,9 @@ from operator import itemgetter
 from sklearn.decomposition import NMF
 import tqdm
 import math
+from pyfm import pylibfm
+from sklearn.feature_extraction import DictVectorizer
+
 
 class CrossValidation():
     def __init__(self,name,K=5,method=None):
@@ -23,7 +26,7 @@ class CrossValidation():
         self.split_data()
         self.method_func=self.choice_func(method)
         if method==11:
-            self.model = NMF(n_components=500, verbose=True)
+            self.model = NMF(n_components=100, verbose=False)
             self.user_feature_matrix = self.model.fit_transform(self.sparse_data)
 
     #データを読み込み分割
@@ -358,7 +361,7 @@ class CrossValidation():
     # 方法11 - 過去と協調のハイブリッド推薦手法
     def method11_past_and_collaborate(self, num):
         # NMFで推薦する個数
-        nmf_number=0
+        nmf_number_min=6
         item_feature_matrix = self.model.components_
 
         with open('../data/view/analysis_content_' + self.name + '.pickle', 'rb') as f:
@@ -368,15 +371,13 @@ class CrossValidation():
         for i in tqdm.tqdm(test_ids):
             if i not in self.id_dic['user_id']:
                 continue
-            nmf_number = 0
+            nmf_number = nmf_number_min
             # ユニークitem idを取得
             tmp_dict = {}
             if i not in time_r_dic.keys():
                 continue
             sorted_list = time_r_dic[i]['items']
-            if len(sorted_list) > 22 - nmf_number:
-                sorted_list = sorted_list[:22-nmf_number]
-            elif len(sorted_list)<22:
+            if len(sorted_list)<22 - nmf_number:
                 nmf_number=22-len(sorted_list)
             est_user_eval = np.dot(self.user_feature_matrix[self.id_dic['user_id'].index(i)], item_feature_matrix)
             tmp = sorted(zip(est_user_eval, self.id_dic['product_id']), key=lambda x: x[0], reverse=True)
@@ -388,6 +389,8 @@ class CrossValidation():
                 if predict[num] not in sorted_list:
                     add_list.append(predict[num])
                 num+=1
+            if len(sorted_list) > 22 - nmf_number:
+                sorted_list = sorted_list[:22-nmf_number]
             sorted_list.extend(add_list)
             predict_test[i] = sorted_list
         return self.evaluate(predict_test)
@@ -452,7 +455,7 @@ def all_CV(number=5,method=None):
     print('CV開始いたします')
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
-        for i in ['A','B','C','D']:
+        for i in ['A','B','C']:
             a=CrossValidation(i,K=5,method=method)
             scores[i]+=a.CV_multi()
     print(str(number) + '回平均結果')

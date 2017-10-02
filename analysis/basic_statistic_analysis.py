@@ -17,7 +17,9 @@ from sklearn.decomposition import NMF
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import Pipeline
+from sklearn.feature_extraction import DictVectorizer
 import cudamat as cm
+from multiprocessing import Process,Manager
 
 # データ読み込み
 def read_data(name):
@@ -682,8 +684,66 @@ def nmf_analysis(name,components):
                 out_list.append(i)
 
 # FM用のデータの作成
-def fm_datacreate():
+def fm_datacreate(name):
+    with open('../data/personal/personal_train_'+name+'.pickle','rb') as f:
+        personal_data=pickle.load(f)
+    with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
+        time_weight = pickle.load(f)
+    manager=Manager()
+    rt_data=manager.list()
+    # in each user
+    split_num=int(len(personal_data)/8)
+    jobs=[]
+    for i in range(8):
+        p = Process(target=fm_multijob, args=(personal_data,list(personal_data.keys())[i*split_num:(i+1)*split_num],rt_data,time_weight))
+        jobs.append(p)
+    [x.start() for x in jobs]
+    [x.join() for x in jobs]
+    with open('../data/fm/ev_data_'+name+'.pickle','wb') as f:
+        pickle.dump(list(rt_data),f)
+def fm_multijob(data,keys,rt_data,time_weight):
+    X=[]
+    y=[]
+    test_min=datetime.datetime(year=2017,month=4,day=19)
+    for user in tqdm.tqdm(keys):
+        tmp_train = data[user][data[user]['time_stamp'] < datetime.datetime(year=2017, month=4, day=19)]
+        tmp_test = data[user][data[user]['time_stamp'] > datetime.datetime(year=2017, month=4, day=19)]
+        if len(tmp_train)==0:
+            continue
+        for item in pd.unique(tmp_train['product_id']):
+            user_dic = {'user': user,'item':item,'cart':0,'view':0,'click':0,'conv':0,'first_day':0,'last_day':30,'event_num':0}
+            for _, row in tmp_train[tmp_train['product_id'] == item].iterrows():
+                user_dic['event_num']+=1
 
+                day=-1 * (row['time_stamp'] - test_min).days
+
+                if row['event_type'] == 0:
+                    user_dic['cart'] += 1 * time_weight[day]
+                elif row['event_type'] == 1:
+                    user_dic['view'] += 1 * time_weight[day]
+                elif row['event_type'] == 2:
+                    user_dic['click'] += 1 * time_weight[day]
+                elif row['event_type'] == 3:
+                    user_dic['conv'] += 1 * time_weight[day]
+
+                if day > user_dic['first_day']:
+                    user_dic['first_day']=day
+                if day < user_dic['last_day']:
+                    user_dic['last_day']=day
+
+            max_ev=0
+            for _, row in tmp_test[tmp_test['product_id'] == item].iterrows():
+                if row['event_type'] == 3 and row['ad'] == 1:
+                    max_ev=8
+                    break
+                elif row['event_type'] == 2 and max_ev<4:
+                    max_ev=4
+                elif row['event_type'] == 1 and max_ev<2:
+                    max_ev=2
+            X.append(user_dic)
+            y.append(max_ev)
+    rt_tmp={'X':X,'y':y}
+    rt_data.append(rt_tmp)
 
 if __name__=='__main__':
     #view_time()
@@ -692,4 +752,4 @@ if __name__=='__main__':
     #analysis_content(False)
     #analysis_content(True)
     #nmf_save(800)
-    nmf_analysis('A',100)
+    fm_datacreate('A')

@@ -4,6 +4,7 @@
 
 import pandas as pd
 import numpy as np
+import scipy.sparse as sparse
 from numba import jit
 import datetime
 import pickle
@@ -16,6 +17,9 @@ import tqdm
 import math
 from pyfm import pylibfm
 from sklearn.feature_extraction import DictVectorizer
+from fastFM import als,sgd
+from sklearn.preprocessing import Normalizer
+from sklearn.ensemble import RandomForestRegressor
 
 
 class CrossValidation():
@@ -28,6 +32,43 @@ class CrossValidation():
         if method==11:
             self.model = NMF(n_components=100, verbose=False)
             self.user_feature_matrix = self.model.fit_transform(self.sparse_data)
+        if method==12:
+            print('learn start')
+            with open('../data/fm/fm_train_X_' + self.name + '.pickle', 'rb') as f:
+                r_X = pickle.load(f)
+            with open('../data/fm/fm_train_y_' + self.name + '.pickle', 'rb') as f:
+                r_y = pickle.load(f)
+
+            # mask user and item
+            newX=[]
+            for i in r_X:
+                tmp_i=i
+                del(tmp_i['user'])
+                del (tmp_i['item'])
+                newX.append(tmp_i)
+
+            self.v = DictVectorizer()
+            X = self.v.fit_transform(newX)
+            y = np.array(r_y).astype(np.float)
+            self.raw_X = X
+
+            # 正規化する必要がある
+            #self.scaler=Normalizer()
+            #X=self.scaler.fit_transform(X)
+            #self.fm = als.FMRegression(n_iter=100,rank=16,)
+            #self.fm=pylibfm.FM(num_factors=16, num_iter=100, verbose=True, task="regression", initial_learning_rate=0.001, learning_rate_schedule="optimal")
+            #self.fm.fit(X,y)
+
+            self.model=RandomForestRegressor(n_estimators=500,n_jobs=8)
+            self.model.fit(X,y)
+            print('learn finished')
+        if method==13:
+            with open('../data/ml/ml_train_X_' + self.name + '.pickle', 'rb') as f:
+                r_X = pickle.load(f)
+            with open('../data/ml/ml_train_y_' + self.name + '.pickle', 'rb') as f:
+                r_y = pickle.load(f)
+            self.model = RandomForestRegressor(n_estimators=10, n_jobs=8)
+            self.model.fit(r_X, r_y)
 
     #データを読み込み分割
     def read_data(self):
@@ -395,6 +436,99 @@ class CrossValidation():
             predict_test[i] = sorted_list
         return self.evaluate(predict_test)
 
+    # 方法12 - FMを用いた推薦法
+    def method12_fm_original(self,num):
+        with open('../data/time_weight/fitting_balanced_' + self.name + '.pickle', 'rb') as f:
+            time_weight=pickle.load(f)
+        test_ids = self.cv_tests[num]
+        test_ids=test_ids[:100]
+        test_min = datetime.datetime(year=2017, month=4, day=24)
+        predict_test = {}
+        for user in tqdm.tqdm(test_ids):
+            # ユニークitem idを取得
+            tmp_dict = {}
+
+            past_items = pd.unique(self.personal_train[user]['product_id'])
+            for item in past_items:
+                #user_dic = {'user': user,'item':item,'cart':0,'view':0,'click':0,'conv':0,'first_day':0,'last_day':30,'event_num':0}
+                user_dic = {'cart': 0, 'view': 0, 'click': 0, 'conv': 0, 'first_day': 0,
+                            'last_day': 30, 'event_num': 0}
+                item_list=[]
+                input_list=[]
+                for _, row in self.personal_train[user][self.personal_train[user]['product_id'] == item].iterrows():
+                    user_dic['event_num']+=1
+
+                    day=-1 * (row['time_stamp'] - test_min).days
+
+                    if row['event_type'] == 0:
+                        user_dic['cart'] += 1 * time_weight[day]
+                    elif row['event_type'] == 1:
+                        user_dic['view'] += 1 * time_weight[day]
+                    elif row['event_type'] == 2:
+                        user_dic['click'] += 1 * time_weight[day]
+                    elif row['event_type'] == 3:
+                        user_dic['conv'] += 1 * time_weight[day]
+
+                    if day > user_dic['first_day']:
+                        user_dic['first_day']=day
+                    if day < user_dic['last_day']:
+                        user_dic['last_day']=day
+
+                # standalization
+                a=self.v.transform([user_dic])
+                #p=self.fm.predict(a)
+                p=self.model.predict(a)
+                tmp_dict[item]=p[0]
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[user] = [x for x, y in sorted_list]
+        return self.evaluate(predict_test)
+
+    # 方法12 - FMを用いた推薦法
+    def method13_random_forest(self, num):
+        with open('../data/time_weight/fitting_balanced_' + self.name + '.pickle', 'rb') as f:
+            time_weight = pickle.load(f)
+        test_ids = self.cv_tests[num]
+        #test_ids = test_ids
+        test_min = datetime.datetime(year=2017, month=4, day=24)
+        predict_test = {}
+        for user in tqdm.tqdm(test_ids):
+            # ユニークitem idを取得
+            tmp_dict = {}
+
+            past_items = pd.unique(self.personal_train[user]['product_id'])
+            for item in past_items:
+                user_dic = {'cart': 0, 'view': 0, 'click': 0, 'conv': 0, 'first_day': 0,
+                            'last_day': 30, 'event_num': 0}
+                for _, row in self.personal_train[user][self.personal_train[user]['product_id'] == item].iterrows():
+                    user_dic['event_num'] += 1
+
+                    day = -1 * (row['time_stamp'] - test_min).days
+
+                    if row['event_type'] == 0:
+                        user_dic['cart'] += 1 * time_weight[day]
+                    elif row['event_type'] == 1:
+                        user_dic['view'] += 1 * time_weight[day]
+                    elif row['event_type'] == 2:
+                        user_dic['click'] += 1 * time_weight[day]
+                    elif row['event_type'] == 3:
+                        user_dic['conv'] += 1 * time_weight[day]
+
+                    if day > user_dic['first_day']:
+                        user_dic['first_day'] = day
+                    if day < user_dic['last_day']:
+                        user_dic['last_day'] = day
+                ml_data = [[user_dic['cart'], user_dic['view'], user_dic['click'], user_dic['conv'],
+                           user_dic['first_day'], user_dic['last_day'], user_dic['event_num']]]
+                p = self.model.predict(ml_data)
+                tmp_dict[item] = p[0]
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+            predict_test[user] = [x for x, y in sorted_list]
+        return self.evaluate(predict_test)
+
     # Cross-validationの実行
     def CV_multi(self):
         jobs=[]
@@ -447,6 +581,10 @@ class CrossValidation():
             return self.method10_time_weight
         elif num == 11:
             return self.method11_past_and_collaborate
+        elif num == 12:
+            return self.method12_fm_original
+        elif num == 13:
+            return self.method13_random_forest
         else:
             print('メゾッドを選択してください')
             return -1
@@ -455,7 +593,7 @@ def all_CV(number=5,method=None):
     print('CV開始いたします')
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
-        for i in ['A','B','C']:
+        for i in ['A', 'B', 'C', 'D']:
             a=CrossValidation(i,K=5,method=method)
             scores[i]+=a.CV_multi()
     print(str(number) + '回平均結果')
@@ -476,4 +614,4 @@ def result_weight_mean(result):
 
 
 if __name__=='__main__':
-    all_CV(1,11)
+    all_CV(1,13)

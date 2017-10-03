@@ -20,6 +20,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction import DictVectorizer
 import cudamat as cm
 from multiprocessing import Process,Manager
+from fastFM import mcmc
+from pyfm import pylibfm
 
 # データ読み込み
 def read_data(name):
@@ -744,6 +746,133 @@ def fm_multijob(data,keys,rt_data,time_weight):
             y.append(max_ev)
     rt_tmp={'X':X,'y':y}
     rt_data.append(rt_tmp)
+def connect_fm_train():
+    for name in ['A','B','C','D']:
+        with open('../data/fm/ev_data_'+name+'.pickle','rb') as f:
+            data=pickle.load(f)
+        X=[]
+        y=[]
+        for i in data:
+            X.extend(i['X'])
+            y.extend(i['y'])
+        with open('../data/fm/fm_train_X_'+name+'.pickle','wb') as f:
+            pickle.dump(X,f)
+        with open('../data/fm/fm_train_y_'+name+'.pickle','wb') as f:
+            pickle.dump(y,f)
+
+# 機械学習用のデータの作成
+def ml_datacreate():
+    for name in ['A','B','C','D']:
+        print(name)
+        with open('../data/personal/personal_train_'+name+'.pickle','rb') as f:
+            personal_data=pickle.load(f)
+        with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
+            time_weight = pickle.load(f)
+        manager=Manager()
+        rt_data=manager.list()
+        # in each user
+        split_num=int(len(personal_data)/8)
+        jobs=[]
+        for i in range(8):
+            p = Process(target=ml_multijob, args=(personal_data,list(personal_data.keys())[i*split_num:(i+1)*split_num],rt_data,time_weight))
+            jobs.append(p)
+        [x.start() for x in jobs]
+        [x.join() for x in jobs]
+
+        tdata=list(rt_data)
+
+        X = []
+        y = []
+        for i in tdata:
+            X.extend(i['X'])
+            y.extend(i['y'])
+        with open('../data/ml/ml_train_X_' + name + '.pickle', 'wb') as f:
+            pickle.dump(X, f)
+        with open('../data/ml/ml_train_y_' + name + '.pickle', 'wb') as f:
+            pickle.dump(y, f)
+def ml_multijob(data,keys,rt_data,time_weight):
+    X=[]
+    y=[]
+    test_min=datetime.datetime(year=2017,month=4,day=19)
+    for user in tqdm.tqdm(keys):
+        tmp_train = data[user][data[user]['time_stamp'] < datetime.datetime(year=2017, month=4, day=19)]
+        tmp_test = data[user][data[user]['time_stamp'] > datetime.datetime(year=2017, month=4, day=19)]
+        if len(tmp_train)==0:
+            continue
+        for item in pd.unique(tmp_train['product_id']):
+            user_dic = {'user': user,'item':item,'cart':0,'view':0,'click':0,'conv':0,'first_day':0,'last_day':30,'event_num':0}
+            for _, row in tmp_train[tmp_train['product_id'] == item].iterrows():
+                user_dic['event_num']+=1
+
+                day=-1 * (row['time_stamp'] - test_min).days
+
+                if row['event_type'] == 0:
+                    user_dic['cart'] += 1 * time_weight[day]
+                elif row['event_type'] == 1:
+                    user_dic['view'] += 1 * time_weight[day]
+                elif row['event_type'] == 2:
+                    user_dic['click'] += 1 * time_weight[day]
+                elif row['event_type'] == 3:
+                    user_dic['conv'] += 1 * time_weight[day]
+
+                if day > user_dic['first_day']:
+                    user_dic['first_day']=day
+                if day < user_dic['last_day']:
+                    user_dic['last_day']=day
+
+            max_ev=0
+            for _, row in tmp_test[tmp_test['product_id'] == item].iterrows():
+                if row['event_type'] == 3 and row['ad'] == 1:
+                    max_ev=8
+                    break
+                elif row['event_type'] == 2 and max_ev<4:
+                    max_ev=4
+                elif row['event_type'] == 1 and max_ev<2:
+                    max_ev=2
+
+            # ML用のデータ作成
+            ml_data=[user_dic['cart'],user_dic['view'],user_dic['click'],user_dic['conv'],user_dic['first_day'],user_dic['last_day'],user_dic['event_num']]
+
+            X.append(ml_data)
+            y.append(max_ev)
+    rt_tmp={'X':X,'y':y}
+    rt_data.append(rt_tmp)
+
+def fm_test(name):
+    with open('../data/fm/fm_train_X_' + name + '.pickle', 'rb') as f:
+        r_X=pickle.load(f)
+    with open('../data/fm/fm_train_y_' + name + '.pickle', 'rb') as f:
+        r_y=pickle.load(f)
+    v=DictVectorizer()
+    X=v.fit_transform(r_X)
+    y=np.array(r_y)
+
+    test=[{'cart': 0,
+  'click': 0,
+  'conv': 0,
+  'event_num': 1,
+  'first_day': 5,
+  'item': '00012773_a',
+  'last_day': 5,
+  'user': '0031045_A',
+  'view': 0.65614075052270415},
+ {'cart': 0,
+  'click': 0,
+  'conv': 0,
+  'event_num': 2,
+  'first_day': 4,
+  'item': '00012328_a',
+  'last_day': 4,
+  'user': '0049227_A',
+  'view': 1.4666060679820292}
+]
+    test=v.transform(test)
+    print(X.shape)
+    print(test.shape)
+
+    fm=mcmc.FMRegression(rank=16)
+    a=fm.fit_predict(X,y,test)
+    print(a)
 
 if __name__=='__main__':
     #view_time()
@@ -752,4 +881,5 @@ if __name__=='__main__':
     #analysis_content(False)
     #analysis_content(True)
     #nmf_save(800)
-    fm_datacreate('A')
+    #fm_datacreate('D')
+    ml_datacreate()

@@ -21,6 +21,7 @@ from sklearn.feature_extraction import DictVectorizer
 from multiprocessing import Process,Manager
 from fastFM import mcmc
 from pyfm import pylibfm
+import GPyOpt
 
 # データ読み込み
 def read_data(name):
@@ -35,8 +36,9 @@ def read_personal_test(name):
         data=pickle.load(f)
     return data
 def read_personal_train(name):
-    with open('../data/personal/personal_train_'+name+'.pickle', 'rb') as f:
-        data=pickle.load(f)
+    # with open('../data/personal/personal_train_'+name+'.pickle', 'rb') as f:
+    #     data=pickle.load(f)
+    data=pd.read_pickle('../data/personal/personal_train_'+name+'.pickle')
     return data
 def read_personal_test_idcg(name):
     with open('../data/personal/personal_test_items_IDCG_'+name+'.pickle', 'rb') as f:
@@ -915,7 +917,7 @@ def analyse_past_recommend_score():
     print(score_dic)
 
 #誤差関数
-def DCG(user_id,items,name,personal_result):
+def DCG(user_id,items,personal_result):
     #IDCGが0の場合の分岐
     if personal_result[user_id]['IDCG']==0:
         return -1
@@ -938,12 +940,88 @@ def evaluate(predict,name):
     score=0.0
     count=0
     for i in predict.keys():
-        tmp=DCG(i,predict[i],name,personal_result)
+        tmp=DCG(i,predict[i],personal_result)
         if tmp==-1:
             count+=1
         else:
             score+=tmp
     return score/count
+
+# dic for randomsearch
+def dic_for_randomsaerch(name):
+    train_data = read_data(name)
+    # 時間減衰を読み込み
+    with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
+        time_weight = pickle.load(f)
+    test_min=datetime.datetime(year=2017, month=4, day=24)
+    # 訓練期間のデータをフィルタ
+    train_data = train_data[train_data['time_stamp'] <= datetime.datetime(year=2017, month=4, day=24)]
+    personal_data = read_personal_train(name)
+
+    unique_product_ids = list(pd.unique(train_data['product_id']))
+    unique_user_ids = list(pd.unique(train_data['user_id']))
+
+    # key:user, value:user's dic
+    category_dic={}
+
+    for user_id in tqdm.tqdm(unique_user_ids):
+        user_dic={}
+        for p_id in pd.unique(personal_data[user_id]['product_id']):
+            # key:event, value:count
+            product_dic={'conv':0,'click':0,'view':0,'cart':0}
+            for _, row in personal_data[user_id][personal_data[user_id]['product_id'] == p_id].iterrows():
+                if row['event_type'] == 1:
+                    product_dic['view'] += 1 * time_weight[-1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 0:
+                    product_dic['cart'] += 1 * time_weight[-1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 2:
+                    product_dic['click'] += 1 * time_weight[-1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 3:
+                    product_dic['conv'] += 1 * time_weight[-1 * (row['time_stamp'] - test_min).days]
+            user_dic[p_id]=product_dic
+        category_dic[user_id]=user_dic
+
+    with open('../data/predict_myself/dic_for_randomsearch_' + name + '.pickle', 'wb') as f:
+        pickle.dump(category_dic, f)
+
+# ベイズ最適化用の関数
+def category_weight_score(x):
+    print(x)
+    name='D'
+    with open('../data/predict_myself/dic_for_randomsearch_' + name + '.pickle', 'rb') as f:
+        category_dic=pickle.load(f)
+    conv, click, view, cart = float(x[:, 0]), float(x[:, 1]),float(x[:, 2]), float(x[:, 3])
+    predict_dic={}
+    for user in category_dic.keys():
+        score_dic={}
+        for item in category_dic[user].keys():
+            score=0
+            score += category_dic[user][item]['conv'] * conv
+            score += category_dic[user][item]['click'] * click
+            score += category_dic[user][item]['view'] * view
+            score += category_dic[user][item]['cart'] * cart
+            score_dic[item]=score
+        recommend = [k for k, v in sorted(score_dic.items(), key=lambda x: x[1], reverse=True)]
+        if len(recommend)>22:
+            recommend=recommend[:22]
+        predict_dic[user]=recommend
+    score=evaluate(predict_dic,name)
+    print(score)
+    return -1*score
+
+# ベイズ最適化
+def baysian_optimazation():
+    bounds = [{'name': 'conv', 'type': 'continuous', 'domain': (0.0, 1.0)},
+              {'name': 'click', 'type': 'continuous', 'domain': (0.0, 1.0)},
+              {'name': 'view', 'type': 'continuous', 'domain': (0.0, 1.0)},
+              {'name': 'cart', 'type': 'continuous', 'domain': (0.0, 1.0)},]
+    # 事前探索を行います。
+    opt_mnist = GPyOpt.methods.BayesianOptimization(f=category_weight_score, domain=bounds,initial_design_numdata=20,verbosity=True)
+
+    # 最適なパラメータを探索します。
+    opt_mnist.run_optimization(max_iter=100,verbosity=True)
+    print("optimized parameters: {0}".format(opt_mnist.x_opt))
+    print("optimized loss: {0}".format(opt_mnist.fx_opt))
 
 if __name__=='__main__':
     #view_time()
@@ -953,4 +1031,5 @@ if __name__=='__main__':
     #analysis_content(True)
     #nmf_save(800)
     #fm_datacreate('D')
-    analyse_past_recommend_score()
+    baysian_optimazation()
+    #dic_for_randomsaerch('A')

@@ -20,6 +20,7 @@ from sklearn.feature_extraction import DictVectorizer
 from fastFM import als,sgd
 from sklearn.preprocessing import Normalizer
 from sklearn.ensemble import RandomForestRegressor
+import csv
 
 
 class CrossValidation():
@@ -485,7 +486,7 @@ class CrossValidation():
             predict_test[user] = [x for x, y in sorted_list]
         return self.evaluate(predict_test)
 
-    # 方法12 - FMを用いた推薦法
+    # 方法13 - MLを用いた推薦法
     def method13_random_forest(self, num):
         with open('../data/time_weight/fitting_balanced_' + self.name + '.pickle', 'rb') as f:
             time_weight = pickle.load(f)

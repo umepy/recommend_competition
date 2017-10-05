@@ -63,11 +63,11 @@ class CrossValidation():
             self.model.fit(X,y)
             print('learn finished')
         if method==13:
-            with open('../data/ml/ml_train_X_' + self.name + '.pickle', 'rb') as f:
+            with open('../data/ml/ml_train_adconv_X_' + self.name + '.pickle', 'rb') as f:
                 r_X = pickle.load(f)
-            with open('../data/ml/ml_train_y_' + self.name + '.pickle', 'rb') as f:
+            with open('../data/ml/ml_train_adconv_y_' + self.name + '.pickle', 'rb') as f:
                 r_y = pickle.load(f)
-            self.model = RandomForestRegressor(n_estimators=10, n_jobs=8)
+            self.model = RandomForestRegressor(n_estimators=100, n_jobs=8)
             self.model.fit(r_X, r_y)
 
     #データを読み込み分割

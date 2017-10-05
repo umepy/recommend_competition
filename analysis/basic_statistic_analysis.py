@@ -786,9 +786,9 @@ def ml_datacreate():
         for i in tdata:
             X.extend(i['X'])
             y.extend(i['y'])
-        with open('../data/ml/ml_train_X_' + name + '.pickle', 'wb') as f:
+        with open('../data/ml/ml_train_onlyone_X_' + name + '.pickle', 'wb') as f:
             pickle.dump(X, f)
-        with open('../data/ml/ml_train_y_' + name + '.pickle', 'wb') as f:
+        with open('../data/ml/ml_train_onlyone_y_' + name + '.pickle', 'wb') as f:
             pickle.dump(y, f)
 def ml_multijob(data,keys,rt_data,time_weight):
     X=[]
@@ -822,13 +822,15 @@ def ml_multijob(data,keys,rt_data,time_weight):
 
             max_ev=0
             for _, row in tmp_test[tmp_test['product_id'] == item].iterrows():
-                if row['event_type'] == 3 and row['ad'] == 1:
-                    max_ev=8
+                if row['event_type'] == 3:
+                    max_ev=1
                     break
                 elif row['event_type'] == 2 and max_ev<4:
-                    max_ev=4
+                    max_ev=1
+                    break
                 elif row['event_type'] == 1 and max_ev<2:
-                    max_ev=2
+                    max_ev=1
+                    break
 
             # ML用のデータ作成
             ml_data=[user_dic['cart'],user_dic['view'],user_dic['click'],user_dic['conv'],user_dic['first_day'],user_dic['last_day'],user_dic['event_num']]

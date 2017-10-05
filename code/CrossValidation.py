@@ -67,7 +67,7 @@ class CrossValidation():
                 r_X = pickle.load(f)
             with open('../data/ml/ml_train_y_' + self.name + '.pickle', 'rb') as f:
                 r_y = pickle.load(f)
-            self.model = RandomForestRegressor(n_estimators=10, n_jobs=8)
+            self.model = RandomForestRegressor(n_estimators=500, n_jobs=8,max_features=4)
             self.model.fit(r_X, r_y)
 
     #データを読み込み分割

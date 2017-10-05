@@ -18,7 +18,6 @@ from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction import DictVectorizer
-import cudamat as cm
 from multiprocessing import Process,Manager
 from fastFM import mcmc
 from pyfm import pylibfm
@@ -874,6 +873,76 @@ def fm_test(name):
     a=fm.fit_predict(X,y,test)
     print(a)
 
+# 過去からの推薦は最高でどれほどのスコアが出るのか
+def analyse_past_recommend_score():
+    score_dic={}
+    for name in ['A','B','C','D']:
+        predicts_idcg={}
+        predicts_past={}
+        with open('../data/personal/personal_test_items_IDCG_' + name + '.pickle', 'rb') as f:
+            IDCG = pickle.load(f)
+        with open('../data/personal/personal_train_' + name + '.pickle', 'rb') as f:
+            train = pickle.load(f)
+        for user in tqdm.tqdm(train.keys()):
+            # 理想の推薦順を取得
+            user_idcg=IDCG[user]
+            del user_idcg['IDCG']
+            ideal_recommend=[k for k, v in sorted(user_idcg.items(), key=lambda x: x[1], reverse=True)]
+
+            # 過去の商品郡
+            past_products=pd.unique(train[user]['product_id'])
+            past_recommend=[]
+
+            for i in ideal_recommend:
+                if i in past_products:
+                    past_recommend.append(i)
+
+            if len(ideal_recommend)>22:
+                ideal_recommend=ideal_recommend[:22]
+            if len(past_recommend) > 22:
+                past_recommend = past_recommend[:22]
+            predicts_idcg[user]=ideal_recommend
+            predicts_past[user]=past_recommend
+        idcg_score=evaluate(predicts_idcg,name)
+        past_score=evaluate(predicts_past, name)
+        print(idcg_score)
+        print(past_score)
+        print(past_score/idcg_score)
+        score_dic[name+'_idcg']=idcg_score
+        score_dic[name + '_past'] = past_score
+    print(score_dic)
+
+#誤差関数
+def DCG(user_id,items,name,personal_result):
+    #IDCGが0の場合の分岐
+    if personal_result[user_id]['IDCG']==0:
+        return -1
+    #まずDCGを計算
+    DCG=0
+    # 重複を除く
+    new_items=[]
+    for i in items:
+        if i not in new_items:
+            new_items.append(i)
+    for i in range(len(new_items)):
+        if new_items[i] in list(personal_result[user_id].keys()):
+            DCG+=(2**personal_result[user_id][new_items[i]]-1)/np.log2(i+2)
+    return DCG/personal_result[user_id]['IDCG']
+
+#評価関数
+def evaluate(predict,name):
+    with open('../data/personal/personal_test_items_IDCG_' + name + '.pickle', 'rb') as f:
+        personal_result = pickle.load(f)
+    score=0.0
+    count=0
+    for i in predict.keys():
+        tmp=DCG(i,predict[i],name,personal_result)
+        if tmp==-1:
+            count+=1
+        else:
+            score+=tmp
+    return score/count
+
 if __name__=='__main__':
     #view_time()
     #extract_time_and_past_items()
@@ -882,4 +951,4 @@ if __name__=='__main__':
     #analysis_content(True)
     #nmf_save(800)
     #fm_datacreate('D')
-    ml_datacreate()
+    analyse_past_recommend_score()

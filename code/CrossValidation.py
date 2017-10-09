@@ -18,9 +18,10 @@ import math
 from pyfm import pylibfm
 from sklearn.feature_extraction import DictVectorizer
 from fastFM import als,sgd
-from sklearn.preprocessing import Normalizer
+from sklearn.preprocessing import Normalizer,StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 import csv
+import GPyOpt
 
 
 class CrossValidation():
@@ -50,18 +51,17 @@ class CrossValidation():
 
             self.v = DictVectorizer()
             X = self.v.fit_transform(newX)
-            y = np.array(r_y).astype(np.float)
+            self.y = np.array(r_y).astype(np.float)
             self.raw_X = X
 
             # 正規化する必要がある
             #self.scaler=Normalizer()
-            #X=self.scaler.fit_transform(X)
-            #self.fm = als.FMRegression(n_iter=100,rank=16,)
-            #self.fm=pylibfm.FM(num_factors=16, num_iter=100, verbose=True, task="regression", initial_learning_rate=0.001, learning_rate_schedule="optimal")
-            #self.fm.fit(X,y)
+            #self.X=self.scaler.fit_transform(X)
 
-            self.model=RandomForestRegressor(n_estimators=500,n_jobs=8)
-            self.model.fit(X,y)
+            self.scaler=StandardScaler(with_mean=False)
+            self.scaler.fit(X)
+            self.X=self.scaler.transform(X)
+
             print('learn finished')
         if method==13:
             with open('../data/ml/ml_train_adconv_X_' + self.name + '.pickle', 'rb') as f:
@@ -74,10 +74,8 @@ class CrossValidation():
     #データを読み込み分割
     def read_data(self):
         #個人のデータ読み込み
-        with open('../data/personal/personal_test_items_IDCG_'+self.name+'.pickle','rb') as f:
-            self.personal_result=pickle.load(f)
-        with open('../data/personal/personal_train_' + self.name + '.pickle', 'rb') as f:
-            self.personal_train=pickle.load(f)
+        self.personal_result=pd.read_pickle('../data/personal/personal_test_items_IDCG_'+self.name+'.pickle')
+        self.personal_train=pd.read_pickle('../data/personal/personal_train_' + self.name + '.pickle')
         with open('../data/matrix/train_time_weighted_' + self.name + '.pickle', 'rb') as f:
             self.sparse_data = pickle.load(f)
         with open('../data/matrix/id_dic_time_weighted_' + self.name + '.pickle', 'rb') as f:
@@ -370,7 +368,16 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法10 - 方法7に時間重みを加えた推薦法
-    def method10_time_weight(self, num):
+    def method10_time_weight(self, num,x):
+        # ベイズ最適化結果の読み込み
+        parm_dic={'A': {'conv': 0, 'click': 0, 'view': 0.95845924, 'cart': 0.22327048},
+             'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
+             'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
+             'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
+
+        print(x)
+        conv,click,view,cart = float(x[:, 0]), float(x[:, 1]), float(x[:, 2]), float(x[:,3])
+
         with open('../data/time_weight/fitting_balanced_' + self.name + '.pickle', 'rb') as f:
             time_weight=pickle.load(f)
         test_min = datetime.datetime(year=2017, month=4, day=24)
@@ -386,12 +393,14 @@ class CrossValidation():
             for j in past_items:
                 tmp_dict[j] = 0
                 for _,row in self.personal_train[i][self.personal_train[i]['product_id'] == j].iterrows():
-                    if row['event_type'] == 1:
-                        tmp_dict[j] += 3 * time_weight[-1*(row['time_stamp']-test_min).days]
-                    elif row['event_type'] == 0:
-                        tmp_dict[j] += 2 * time_weight[-1*(row['time_stamp']-test_min).days]
+                    if row['event_type'] == 3:
+                        tmp_dict[j] += conv * time_weight[-1*(row['time_stamp']-test_min).days]
                     elif row['event_type'] == 2:
-                        tmp_dict[j] += 1 * time_weight[-1*(row['time_stamp']-test_min).days]
+                        tmp_dict[j] += click * time_weight[-1*(row['time_stamp']-test_min).days]
+                    elif row['event_type'] == 1:
+                        tmp_dict[j] += view * time_weight[-1*(row['time_stamp']-test_min).days]
+                    elif row['event_type'] == 0:
+                        tmp_dict[j] += cart * time_weight[-1*(row['time_stamp']-test_min).days]
 
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
             if len(sorted_list) > 22:
@@ -438,7 +447,11 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法12 - FMを用いた推薦法
-    def method12_fm_original(self,num):
+    def method12_fm_original(self,num,x):
+        print(x)
+        w, p_v, l2, iter, rank = float(x[:, 0]), float(x[:, 1]), float(x[:, 2]), int(x[:, 3]), int(x[:, 4])
+        self.fm = als.FMRegression(n_iter=iter, rank=rank, l2_reg_w=w, l2_reg_V=p_v,l2_reg=l2)
+        self.fm.fit(self.X, self.y)
         with open('../data/time_weight/fitting_balanced_' + self.name + '.pickle', 'rb') as f:
             time_weight=pickle.load(f)
         test_ids = self.cv_tests[num]
@@ -477,8 +490,8 @@ class CrossValidation():
 
                 # standalization
                 a=self.v.transform([user_dic])
-                #p=self.fm.predict(a)
-                p=self.model.predict(a)
+                a=self.scaler.transform(a)
+                p=self.fm.predict(a)
                 tmp_dict[item]=p[0]
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
             if len(sorted_list) > 22:
@@ -531,17 +544,17 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # Cross-validationの実行
-    def CV_multi(self):
+    def CV_multi(self,parms):
         jobs=[]
         manager = Manager()
         score_dic = manager.dict()
         for i in range(self.K):
-            p = Process(target=self.do_method, args=(i,score_dic))
+            p = Process(target=self.do_method, args=(i,score_dic,parms))
             jobs.append(p)
         [x.start() for x in jobs]
         [x.join() for x in jobs]
         print('Score '+ self.name +' : {0}'.format(np.mean(list(score_dic.values()))))
-        return np.mean(list(score_dic.values()))
+        return -1*np.mean(list(score_dic.values()))
 
     # Cross-validationの実行
     def CV_normal(self):
@@ -551,8 +564,8 @@ class CrossValidation():
         return a
 
     # 並列計算用のCV関数
-    def do_method(self,data,dic):
-        result = self.method_func(data)
+    def do_method(self,data,dic,parms):
+        result = self.method_func(data,parms)
         dic[result] = result
 
     #メゾッド選択用関数
@@ -590,13 +603,13 @@ class CrossValidation():
             print('メゾッドを選択してください')
             return -1
 
-def all_CV(number=5,method=None):
+def all_CV(number=5,method=None,parms=None):
     print('CV開始いたします')
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A', 'B', 'C', 'D']:
             a=CrossValidation(i,K=5,method=method)
-            scores[i]+=a.CV_multi()
+            scores[i]+=a.CV_multi(parms)
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:
         scores[i]/=number
@@ -613,6 +626,23 @@ def result_weight_mean(result):
         score+=result[i]*population[i]
     return score
 
+def baysian_optimazation_for_fm():
+    bounds = [{'name': 'conv', 'type': 'continuous', 'domain': (0, 1.0)},
+              {'name': 'click', 'type': 'continuous', 'domain': (0, 1.0)},
+              {'name': 'view', 'type': 'continuous', 'domain': (0, 1.0)},
+              {'name': 'cart', 'type': 'continuous', 'domain': (0, 1.0)}]
+
+    a = CrossValidation('B', K=5, method=10)
+
+    # 事前探索を行います。
+    opt_mnist = GPyOpt.methods.BayesianOptimization(f=a.CV_multi, domain=bounds,initial_design_numdata=10,verbosity=True)
+
+    # 最適なパラメータを探索します。
+    opt_mnist.run_optimization(max_iter=30,verbosity=True)
+    print("optimized parameters: {0}".format(opt_mnist.x_opt))
+    print("optimized loss: {0}".format(opt_mnist.fx_opt))
+
 
 if __name__=='__main__':
-    all_CV(1,13)
+    #all_CV(1,12)
+    baysian_optimazation_for_fm()

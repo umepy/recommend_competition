@@ -32,8 +32,7 @@ def read_personal_data(name):
         data=pickle.load(f)
     return data
 def read_personal_test(name):
-    with open('../data/personal/personal_test_'+name+'.pickle', 'rb') as f:
-        data=pickle.load(f)
+    data=pd.read_pickle('../data/personal/personal_test_'+name+'.pickle')
     return data
 def read_personal_train(name):
     # with open('../data/personal/personal_train_'+name+'.pickle', 'rb') as f:
@@ -453,31 +452,98 @@ def extract_time_and_past_items():
         idcg=read_personal_test_idcg(name)
 
         # トレイン期間とテスト期間の商品の時間の差分
-        days=[]
+        days_all=Manager().list()
+        days_and=Manager().list()
 
-        # 各ユーザに対して
-        for user in tqdm.tqdm(idcg.keys()):
-            train_unique_items=pd.unique(train[user]['product_id'])
-            test_unique_items=pd.unique(test[user]['product_id'])
-            # どちらにも存在するitemを抽出
-            #item_subset=set(train_unique_items) & set(test_unique_items)
+        jobs=[]
+        n=len(idcg.keys())//8
+        users=list(zip(*[iter(list(idcg.keys()))] * n))
+        for i in range(8):
+            p = Process(target=extract_sub, args=(users[i], train,test,days_all,days_and))
+            jobs.append(p)
+        [x.start() for x in jobs]
+        [x.join() for x in jobs]
+        days_all=list(days_all)
+        days_and=list(days_and)
 
-            # train期間におけるイベントの期間分布を調べる
-            item_subset=train_unique_items
+        if len(days_all)==0:
+            continue
 
-            for item in item_subset:
-                # テスト期間の一番早い時間
-                #test_min = test[user][test[user]['product_id']==item]['time_stamp'].min()
-                # テスト開始期間に合わせる
-                test_min=datetime.datetime(year=2017,month=4,day=24)
+        out_dic={'all':days_all,'and':days_and}
+        with open('../data/view/dic_number_cart_'+name+'_.pickle','wb') as f:
+            pickle.dump(out_dic,f)
 
-                # トレイン期間の全イベントのndarrayを作成
-                train_ndarray=pd.to_datetime(train[user][train[user]['product_id']==item]['time_stamp'])-test_min
-                for i in train_ndarray:
-                    days.append(i.days)
+def extract_sub(users,train,test,d_all,d_and):
+    # テスト開始期間に合わせる
+    test_min = datetime.datetime(year=2017, month=4, day=24)
+    # 各ユーザに対して
+    for user in tqdm.tqdm(users):
+        train_unique_items = pd.unique(train[user]['product_id'])
+        test_unique_items = pd.unique(test[user]['product_id'])
+        # どちらにも存在するitemを抽出
+        item_subset = set(train_unique_items) & set(test_unique_items)
 
-        with open('../data/view/time_all_train_teststart_'+str(name)+'.pickle','wb') as f:
-            pickle.dump(days,f)
+        # train期間におけるイベントの期間分布を調べる
+        item_subset_all = train_unique_items
+
+        for item in item_subset_all:
+            add_flag = False
+            if item in item_subset:
+                add_flag = True
+            # トレイン期間の全イベントのndarrayを作成
+            tmp_train = train[user][train[user]['product_id'] == item]
+            train_ndarray = pd.to_datetime(tmp_train[tmp_train['event_type'] == 0]['time_stamp']) - test_min
+            for i in train_ndarray:
+                d_all.append(i.days)
+                if add_flag:
+                    d_and.append(i.days)
+def view_time_category(name):
+    for categ in ['conv','click','view','cart']:
+        with open('../data/view/dic_number_'+categ+'_' + name + '_.pickle', 'rb') as f:
+            dic=pickle.load(f)
+        days_all=dic['all']
+        days_and=dic['and']
+        data_all = -1 * np.array(days_all)
+        data_and = -1 * np.array(days_and)
+        x = list(range(0,31))
+        y_all = np.zeros(31)
+        y_and = np.zeros(31)
+        y_balanced = np.zeros(31)
+        for i in data_all:
+            y_all[i]+=1
+        for i in data_and:
+            y_and[i] += 1
+        y_all = np.array(y_all) / max(y_all)
+        y_and = np.array(y_and) / max(y_and)
+        for i in x:
+            if y_all[i]!=0:
+                y_balanced[i]=y_and[i]/y_all[i]
+        y_balanced=np.array(y_balanced)/max(y_balanced)
+        regr = Pipeline([
+            ('poly', PolynomialFeatures(degree=2)),
+            ('linear', LinearRegression())
+        ])
+        x=[]
+        y=[]
+        for i in range(30):
+            if i>=len(y_balanced):
+                continue
+            if y_balanced[i]!=0:
+                x.append(i)
+                y.append(y_balanced[i])
+        regr.fit(np.array(x).reshape((len(x), 1)), np.array(y).reshape((len(x), 1)))
+        # make predictions
+
+        plt.plot(x, y, 'o', label='Plot')
+        xt = np.linspace(1, 30.0, num=100).reshape((100, 1))
+        yt = regr.predict(xt)
+
+        plt.plot(xt, yt, label='Fitting')
+        plt.xlabel('days')
+        plt.ylabel('amount')
+        plt.title('Distribution of ' + name+'_'+categ)
+        plt.show()
+
 def view_time_fitting(balance):
     for name in ['A', 'B', 'C', 'D']:
         with open('../data/view/time_teststart_' + str(name) + '.pickle', 'rb') as f:
@@ -506,7 +572,7 @@ def view_time_fitting(balance):
         y=np.array(y)/max(y)
         # train a linear regression model
         regr = Pipeline([
-            ('poly', PolynomialFeatures(degree=3)),
+            ('poly', PolynomialFeatures(degree=2)),
             ('linear', LinearRegression())
         ])
         regr.fit(np.array(x).reshape((24,1)), np.array(y).reshape((24,1)))
@@ -1024,12 +1090,4 @@ def baysian_optimazation():
     print("optimized loss: {0}".format(opt_mnist.fx_opt))
 
 if __name__=='__main__':
-    #view_time()
-    #extract_time_and_past_items()
-    #create_evaluate_matrix_time_weighted('D')
-    #analysis_content(False)
-    #analysis_content(True)
-    #nmf_save(800)
-    #fm_datacreate('D')
-    baysian_optimazation()
-    #dic_for_randomsaerch('A')
+    view_time_category('A')

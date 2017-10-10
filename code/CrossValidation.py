@@ -349,22 +349,30 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法9 - NMFのみを用いた推薦
-    def method9_NMF_only(self, num):
+    def method9_NMF_only(self, num,x):
+        print(x)
+        alpha,l1,n_comp,iter_num,tol= float(x[:, 0]), float(x[:, 1]), int(x[:, 2]), int(x[:, 3]),float(x[:, 4])
         test_ids = self.cv_tests[num]
         predict_test = {}
         # item-baseの推薦は評価値行列の転置と評価値行列の内積で計算できる
-        model = NMF(n_components=500)
+        model = NMF(n_components=n_comp,max_iter=iter_num,tol=tol,alpha=alpha,l1_ratio=l1)
         user_feature_matrix=model.fit_transform(self.sparse_data)
         item_feature_matrix=model.components_
 
         for i in tqdm.tqdm(test_ids):
             if i not in self.id_dic['user_id']:
                 continue
+            user_unique_train=pd.unique(self.personal_train[i]['product_id'])
             est_user_eval=np.dot(user_feature_matrix[self.id_dic['user_id'].index(i)],item_feature_matrix)
             tmp=sorted(zip(est_user_eval,self.id_dic['product_id']),key=lambda x:x[0],reverse=True)
             predict=list(zip(*tmp))[1]
-            predict=predict[:22]
-            predict_test[i]=predict
+            out_dic=[]
+            for j in predict:
+                if j not in user_unique_train:
+                    out_dic.append(j)
+                if len(out_dic)==22:
+                    break
+            predict_test[i]=out_dic
         return self.evaluate(predict_test)
 
     # 方法10 - 方法7に時間重みを加えた推薦法
@@ -627,12 +635,13 @@ def result_weight_mean(result):
     return score
 
 def baysian_optimazation_for_fm():
-    bounds = [{'name': 'conv', 'type': 'continuous', 'domain': (0, 1.0)},
-              {'name': 'click', 'type': 'continuous', 'domain': (0, 1.0)},
-              {'name': 'view', 'type': 'continuous', 'domain': (0, 1.0)},
-              {'name': 'cart', 'type': 'continuous', 'domain': (0, 1.0)}]
+    bounds = [{'name': 'alpha', 'type': 'continuous', 'domain': (0, 1.0)},
+              {'name': 'l1', 'type': 'continuous', 'domain': (0, 1.0)},
+              {'name': 'n_comp', 'type': 'discrete', 'domain': (2,4,8,16,32,64,128,256)},
+              {'name': 'iter', 'type': 'discrete', 'domain': (100,200,400,600,1000)},
+              {'name': 'tol', 'type': 'discrete', 'domain': (0.001,0.0001,0.00001)},]
 
-    a = CrossValidation('B', K=5, method=10)
+    a = CrossValidation('B', K=5, method=9)
 
     # 事前探索を行います。
     opt_mnist = GPyOpt.methods.BayesianOptimization(f=a.CV_multi, domain=bounds,initial_design_numdata=10,verbosity=True)

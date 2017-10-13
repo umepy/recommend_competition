@@ -19,9 +19,11 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction import DictVectorizer
 from multiprocessing import Process,Manager
-from fastFM import mcmc
+from fastFM import mcmc,als
 from pyfm import pylibfm
 import GPyOpt
+from sklearn.preprocessing import Normalizer
+import cudamat as cm
 
 # データ読み込み
 def read_data(name):
@@ -32,11 +34,9 @@ def read_personal_data(name):
         data=pickle.load(f)
     return data
 def read_personal_test(name):
-    data=pd.read_pickle('../data/personal/personal_test_'+name+'.pickle')
+    data = pd.read_pickle('../data/personal/personal_test_'+name+'.pickle')
     return data
 def read_personal_train(name):
-    # with open('../data/personal/personal_train_'+name+'.pickle', 'rb') as f:
-    #     data=pickle.load(f)
     data=pd.read_pickle('../data/personal/personal_train_'+name+'.pickle')
     return data
 def read_personal_test_idcg(name):
@@ -385,6 +385,48 @@ def create_evaluate_matrix_time_weighted(name):
     with open('../data/matrix/id_dic_time_weighted_' + name + '.pickle', 'wb') as f:
         pickle.dump(save_dic, f)
 
+    # 訓練期間の評価値行列を作成()
+def create_evaluate_matrix_optimize(name):
+    train_data = read_data(name)
+    # 時間減衰を読み込み
+    with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
+        time_weight = pickle.load(f)
+    parm_dic = {'A': {'conv': 0, 'click': 0.20701892, 'view': 0.78720054, 'cart': 0.19557122},
+                'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
+                'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
+                'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
+    test_min = datetime.datetime(year=2017, month=4, day=24)
+    # 訓練期間のデータをフィルタ
+    train_data = train_data[train_data['time_stamp'] <= datetime.datetime(year=2017, month=4, day=24)]
+    personal_data = read_personal_train(name)
+
+    unique_product_ids = list(pd.unique(train_data['product_id']))
+    unique_user_ids = list(pd.unique(train_data['user_id']))
+
+    ev_matrix = lil_matrix((len(unique_user_ids), len(unique_product_ids)))
+    for user_id in tqdm.tqdm(unique_user_ids):
+        for p_id in pd.unique(personal_data[user_id]['product_id']):
+            for _, row in personal_data[user_id][personal_data[user_id]['product_id'] == p_id].iterrows():
+                if row['event_type'] == 1:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += parm_dic[name]['view'] * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 0:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += parm_dic[name]['cart'] * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 2:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += parm_dic[name]['click'] * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 3:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += parm_dic[name]['conv'] * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+
+    save_dic = {'user_id': unique_user_ids, 'product_id': unique_product_ids}
+
+    with open('../data/matrix/train_optimized_' + name + '.pickle', 'wb') as f:
+        pickle.dump(ev_matrix, f)
+    with open('../data/matrix/id_dic_optimized_' + name + '.pickle', 'wb') as f:
+        pickle.dump(save_dic, f)
+
 # 全期間の評価値行列を作成(重み付け)
 def all_evaluate_matrix_weighted(name):
     train_data=read_data(name)
@@ -442,6 +484,45 @@ def all_evaluate_matrix_time_weighted(name):
     with open('../data/matrix/all_time_weighted_' + name + '.pickle', 'wb') as f:
         pickle.dump(ev_matrix, f)
     with open('../data/matrix/all_id_dic_time_weighted_' + name + '.pickle', 'wb') as f:
+        pickle.dump(save_dic, f)
+
+# 全期間の評価値行列を作成(重み付け)
+def all_evaluate_matrix_optimized(name):
+    train_data = read_data(name)
+    # 時間減衰を読み込み
+    with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
+        time_weight = pickle.load(f)
+    parm_dic = {'A': {'conv': 0, 'click': 0.20701892, 'view': 0.78720054, 'cart': 0.19557122},
+                'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
+                'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
+                'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
+    test_min = datetime.datetime(year=2017, month=5, day=1)
+    personal_data = read_personal_train(name)
+
+    unique_product_ids = list(pd.unique(train_data['product_id']))
+    unique_user_ids = list(pd.unique(train_data['user_id']))
+
+    ev_matrix = lil_matrix((len(unique_user_ids), len(unique_product_ids)))
+    for user_id in tqdm.tqdm(unique_user_ids):
+        for p_id in pd.unique(personal_data[user_id]['product_id']):
+            for _, row in personal_data[user_id][personal_data[user_id]['product_id'] == p_id].iterrows():
+                if row['event_type'] == 1:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += parm_dic[name]['view'] * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 0:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += parm_dic[name]['cart'] * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 2:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += parm_dic[name]['click'] * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+                elif row['event_type'] == 3:
+                    ev_matrix[unique_user_ids.index(user_id), unique_product_ids.index(p_id)] += parm_dic[name]['conv'] * time_weight[
+                        -1 * (row['time_stamp'] - test_min).days]
+
+    save_dic = {'user_id': unique_user_ids, 'product_id': unique_product_ids}
+    with open('../data/matrix/all_optimized_' + name + '.pickle', 'wb') as f:
+        pickle.dump(ev_matrix, f)
+    with open('../data/matrix/all_id_dic_optimized_' + name + '.pickle', 'wb') as f:
         pickle.dump(save_dic, f)
 
 # -----時間と推薦商品の関係の可視化-----
@@ -754,8 +835,8 @@ def nmf_analysis(name,components):
 
 # FM用のデータの作成
 def fm_datacreate(name):
-    with open('../data/personal/personal_train_'+name+'.pickle','rb') as f:
-        personal_data=pickle.load(f)
+    personal_data=read_personal_train(name)
+    personal_test=read_personal_test(name)
     with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
         time_weight = pickle.load(f)
     manager=Manager()
@@ -764,19 +845,28 @@ def fm_datacreate(name):
     split_num=int(len(personal_data)/8)
     jobs=[]
     for i in range(8):
-        p = Process(target=fm_multijob, args=(personal_data,list(personal_data.keys())[i*split_num:(i+1)*split_num],rt_data,time_weight))
+        p = Process(target=fm_multijob, args=(personal_data,personal_test,list(personal_data.keys())[i*split_num:(i+1)*split_num],rt_data,time_weight))
         jobs.append(p)
     [x.start() for x in jobs]
     [x.join() for x in jobs]
-    with open('../data/fm/ev_data_'+name+'.pickle','wb') as f:
-        pickle.dump(list(rt_data),f)
-def fm_multijob(data,keys,rt_data,time_weight):
+
+    tdata=list(rt_data)
+    X = []
+    y = []
+    for i in tdata:
+        X.extend(i['X'])
+        y.extend(i['y'])
+    with open('../data/ml/ml_real_train__X_' + name + '.pickle', 'wb') as f:
+        pickle.dump(X, f)
+    with open('../data/ml/ml_real_train_y_' + name + '.pickle', 'wb') as f:
+        pickle.dump(y, f)
+def fm_multijob(data,test,keys,rt_data,time_weight):
     X=[]
     y=[]
     test_min=datetime.datetime(year=2017,month=4,day=19)
     for user in tqdm.tqdm(keys):
-        tmp_train = data[user][data[user]['time_stamp'] < datetime.datetime(year=2017, month=4, day=19)]
-        tmp_test = data[user][data[user]['time_stamp'] > datetime.datetime(year=2017, month=4, day=19)]
+        tmp_train = data[user]
+        tmp_test = test[user]
         if len(tmp_train)==0:
             continue
         for item in pd.unique(tmp_train['product_id']):
@@ -907,41 +997,44 @@ def ml_multijob(data,keys,rt_data,time_weight):
     rt_tmp={'X':X,'y':y}
     rt_data.append(rt_tmp)
 
-def fm_test(name):
+def fm_test(x):
+    print(x)
+    w, p_v,l2, iter, rank = float(x[:, 0]), float(x[:, 1]), float(x[:, 2]), int(x[:, 3]),int(x[:, 4])
+    name='B'
     with open('../data/fm/fm_train_X_' + name + '.pickle', 'rb') as f:
         r_X=pickle.load(f)
     with open('../data/fm/fm_train_y_' + name + '.pickle', 'rb') as f:
         r_y=pickle.load(f)
+    with open('../data/fm/ml_real_train__X_' + name + '.pickle', 'rb') as f:
+        test = pickle.load(f)
+
     v=DictVectorizer()
     X=v.fit_transform(r_X)
+    scaler = Normalizer()
+    X = scaler.fit_transform(X)
     y=np.array(r_y)
 
-    test=[{'cart': 0,
-  'click': 0,
-  'conv': 0,
-  'event_num': 1,
-  'first_day': 5,
-  'item': '00012773_a',
-  'last_day': 5,
-  'user': '0031045_A',
-  'view': 0.65614075052270415},
- {'cart': 0,
-  'click': 0,
-  'conv': 0,
-  'event_num': 2,
-  'first_day': 4,
-  'item': '00012328_a',
-  'last_day': 4,
-  'user': '0049227_A',
-  'view': 1.4666060679820292}
-]
-    test=v.transform(test)
-    print(X.shape)
-    print(test.shape)
+    v_test=v.transform(test)
+    fm = als.FMRegression(n_iter=iter,rank=rank,l2_reg_w=w,l2_reg_V=p_v,l2_reg=l2)
+    fm.fit(X, y)
+    result=fm.predict(v_test)
 
-    fm=mcmc.FMRegression(rank=16)
-    a=fm.fit_predict(X,y,test)
-    print(a)
+    output = {}
+    user_dic = {}
+    for i in range(len(test)):
+        if test[i]['user'] not in user_dic:
+            user_dic[test[i]['user']]={test[i]['item']:result[i]}
+        else:
+            user_dic[test[i]['user']][test[i]['item']]=result[i]
+
+    for user in user_dic:
+        recommend = [k for k, v in sorted(user_dic[user].items(), key=lambda x: x[1], reverse=True)]
+        if len(recommend) > 22:
+            recommend = recommend[:22]
+        output[user]=recommend
+    rt=evaluate(output,name)
+    print(rt)
+    return -1*rt
 
 # 過去からの推薦は最高でどれほどのスコアが出るのか
 def analyse_past_recommend_score():
@@ -1088,6 +1181,21 @@ def baysian_optimazation():
     opt_mnist.run_optimization(max_iter=100,verbosity=True)
     print("optimized parameters: {0}".format(opt_mnist.x_opt))
     print("optimized loss: {0}".format(opt_mnist.fx_opt))
+# ベイズ最適化
+def baysian_optimazation_for_fm():
+    bounds = [{'name': 'l2_w', 'type': 'continuous', 'domain': (0.0, 1.0)},
+              {'name': 'l2_v', 'type': 'continuous', 'domain': (0.0, 1.0)},
+              {'name': 'l2', 'type': 'continuous', 'domain': (0.0, 1.0)},
+              {'name': 'n_iter', 'type': 'discrete', 'domain': (100,200,300)},
+              {'name': 'rank', 'type': 'discrete', 'domain': (2,4,8,16)},]
+    # 事前探索を行います。
+    opt_mnist = GPyOpt.methods.BayesianOptimization(f=fm_test, domain=bounds,initial_design_numdata=10,verbosity=True)
+
+    # 最適なパラメータを探索します。
+    opt_mnist.run_optimization(max_iter=30,verbosity=True)
+    print("optimized parameters: {0}".format(opt_mnist.x_opt))
+    print("optimized loss: {0}".format(opt_mnist.fx_opt))
 
 if __name__=='__main__':
-    view_time_category('A')
+    #create_evaluate_matrix_optimize('C')
+    all_evaluate_matrix_optimized('D')

@@ -22,17 +22,26 @@ from sklearn.preprocessing import Normalizer,StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 import csv
 import GPyOpt
+import cudamat as cm
 
 
 class CrossValidation():
-    def __init__(self,name,K=5,method=None):
+    def __init__(self,name,K=5,method=None,x=None):
         self.name=name
         self.K = K
         self.read_data()
         self.split_data()
         self.method_func=self.choice_func(method)
+        if method==9:
+            print(x)
+            n_comp, iter_num, tol = int(x[:, 0]), int(x[:, 1]), float(x[:, 2])
+            model = NMF(n_components=n_comp, max_iter=iter_num, tol=tol)
+            self.user_feature_matrix = model.fit_transform(self.sparse_data)
+            self.item_feature_matrix = model.components_
         if method==11:
-            self.model = NMF(n_components=100, verbose=False)
+            print(x)
+            self.min_weight,n_comp, iter_num, tol,self.min_num= float(x[:,0]),int(x[:, 1]), int(x[:, 2]), float(x[:, 3]),int(x[:, 4])
+            self.model = NMF(n_components=n_comp, max_iter=iter_num,tol=tol)
             self.user_feature_matrix = self.model.fit_transform(self.sparse_data)
         if method==12:
             print('learn start')
@@ -76,9 +85,9 @@ class CrossValidation():
         #個人のデータ読み込み
         self.personal_result=pd.read_pickle('../data/personal/personal_test_items_IDCG_'+self.name+'.pickle')
         self.personal_train=pd.read_pickle('../data/personal/personal_train_' + self.name + '.pickle')
-        with open('../data/matrix/train_time_weighted_' + self.name + '.pickle', 'rb') as f:
+        with open('../data/matrix/train_optimized_' + self.name + '.pickle', 'rb') as f:
             self.sparse_data = pickle.load(f)
-        with open('../data/matrix/id_dic_time_weighted_' + self.name + '.pickle', 'rb') as f:
+        with open('../data/matrix/id_dic_optimized_' + self.name + '.pickle', 'rb') as f:
             self.id_dic = pickle.load(f)
     #データを分割
     def split_data(self):
@@ -105,9 +114,14 @@ class CrossValidation():
         for i in items:
             if i not in new_items:
                 new_items.append(i)
+        output=[]
         for i in range(len(new_items)):
             if new_items[i] in list(self.personal_result[user_id].keys()):
                 DCG+=(2**self.personal_result[user_id][new_items[i]]-1)/np.log2(i+2)
+        #         output.append(self.personal_result[user_id][new_items[i]])
+        #     else:
+        #         output.append(0)
+        # print(output)
         return DCG/self.personal_result[user_id]['IDCG']
 
     #評価関数
@@ -349,42 +363,41 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # 方法9 - NMFのみを用いた推薦
-    def method9_NMF_only(self, num,x):
-        print(x)
-        alpha,l1,n_comp,iter_num,tol= float(x[:, 0]), float(x[:, 1]), int(x[:, 2]), int(x[:, 3]),float(x[:, 4])
+    def method9_NMF_only(self, num):
+        # GPUを用いて行列演算（初期化）
+        cm.cuda_set_device(0)
+        cm.init()
         test_ids = self.cv_tests[num]
         predict_test = {}
         # item-baseの推薦は評価値行列の転置と評価値行列の内積で計算できる
-        model = NMF(n_components=n_comp,max_iter=iter_num,tol=tol,alpha=alpha,l1_ratio=l1)
-        user_feature_matrix=model.fit_transform(self.sparse_data)
-        item_feature_matrix=model.components_
+
 
         for i in tqdm.tqdm(test_ids):
             if i not in self.id_dic['user_id']:
                 continue
-            user_unique_train=pd.unique(self.personal_train[i]['product_id'])
-            est_user_eval=np.dot(user_feature_matrix[self.id_dic['user_id'].index(i)],item_feature_matrix)
+            #user_unique_train=pd.unique(self.personal_train[i]['product_id'])
+            #est_user_eval=np.dot(user_feature_matrix[self.id_dic['user_id'].index(i)],item_feature_matrix)
+            index_user = self.id_dic['user_id'].index(i)
+            nmf_result = cm.dot(cm.CUDAMatrix(self.user_feature_matrix[index_user:index_user+1]), cm.CUDAMatrix(self.item_feature_matrix)).asarray()
+            est_user_eval = nmf_result[0]
             tmp=sorted(zip(est_user_eval,self.id_dic['product_id']),key=lambda x:x[0],reverse=True)
             predict=list(zip(*tmp))[1]
             out_dic=[]
             for j in predict:
-                if j not in user_unique_train:
-                    out_dic.append(j)
+                #if j not in user_unique_train:
+                out_dic.append(j)
                 if len(out_dic)==22:
                     break
             predict_test[i]=out_dic
         return self.evaluate(predict_test)
 
     # 方法10 - 方法7に時間重みを加えた推薦法
-    def method10_time_weight(self, num,x):
+    def method10_time_weight(self, num):
         # ベイズ最適化結果の読み込み
         parm_dic={'A': {'conv': 0, 'click': 0, 'view': 0.95845924, 'cart': 0.22327048},
              'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
              'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
              'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
-
-        print(x)
-        conv,click,view,cart = float(x[:, 0]), float(x[:, 1]), float(x[:, 2]), float(x[:,3])
 
         with open('../data/time_weight/fitting_balanced_' + self.name + '.pickle', 'rb') as f:
             time_weight=pickle.load(f)
@@ -402,13 +415,13 @@ class CrossValidation():
                 tmp_dict[j] = 0
                 for _,row in self.personal_train[i][self.personal_train[i]['product_id'] == j].iterrows():
                     if row['event_type'] == 3:
-                        tmp_dict[j] += conv * time_weight[-1*(row['time_stamp']-test_min).days]
+                        tmp_dict[j] += parm_dic[self.name]['conv'] * time_weight[-1*(row['time_stamp']-test_min).days]
                     elif row['event_type'] == 2:
-                        tmp_dict[j] += click * time_weight[-1*(row['time_stamp']-test_min).days]
+                        tmp_dict[j] += parm_dic[self.name]['click'] * time_weight[-1*(row['time_stamp']-test_min).days]
                     elif row['event_type'] == 1:
-                        tmp_dict[j] += view * time_weight[-1*(row['time_stamp']-test_min).days]
+                        tmp_dict[j] += parm_dic[self.name]['view'] * time_weight[-1*(row['time_stamp']-test_min).days]
                     elif row['event_type'] == 0:
-                        tmp_dict[j] += cart * time_weight[-1*(row['time_stamp']-test_min).days]
+                        tmp_dict[j] += parm_dic[self.name]['cart'] * time_weight[-1*(row['time_stamp']-test_min).days]
 
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
             if len(sorted_list) > 22:
@@ -419,8 +432,11 @@ class CrossValidation():
 
     # 方法11 - 過去と協調のハイブリッド推薦手法
     def method11_past_and_collaborate(self, num):
+        # GPUを用いて行列演算（初期化）
+        cm.cuda_set_device(0)
+        cm.init()
         # NMFで推薦する個数
-        nmf_number_min=6
+        nmf_number_min=0
         item_feature_matrix = self.model.components_
 
         with open('../data/view/analysis_content_' + self.name + '.pickle', 'rb') as f:
@@ -435,10 +451,20 @@ class CrossValidation():
             tmp_dict = {}
             if i not in time_r_dic.keys():
                 continue
-            sorted_list = time_r_dic[i]['items']
+
+            sorted_list=time_r_dic[i]['items']
+
+            if len(sorted_list)>=self.min_num:
+                sorted_list = []
+                for i_rank in range(len(time_r_dic[i]['items'])):
+                    if time_r_dic[i]['importance'][i_rank]>self.min_weight:
+                        sorted_list.append(time_r_dic[i]['items'][i_rank])
             if len(sorted_list)<22 - nmf_number:
                 nmf_number=22-len(sorted_list)
-            est_user_eval = np.dot(self.user_feature_matrix[self.id_dic['user_id'].index(i)], item_feature_matrix)
+            #est_user_eval = np.dot(self.user_feature_matrix[self.id_dic['user_id'].index(i)], item_feature_matrix)
+            index_user=self.id_dic['user_id'].index(i)
+            nmf_result = cm.dot(cm.CUDAMatrix(self.user_feature_matrix[index_user:index_user + 1]),cm.CUDAMatrix(item_feature_matrix)).asarray()
+            est_user_eval=nmf_result[0]
             tmp = sorted(zip(est_user_eval, self.id_dic['product_id']), key=lambda x: x[0], reverse=True)
             predict = list(zip(*tmp))[1]
 
@@ -552,12 +578,12 @@ class CrossValidation():
         return self.evaluate(predict_test)
 
     # Cross-validationの実行
-    def CV_multi(self,parms):
+    def CV_multi(self):
         jobs=[]
         manager = Manager()
         score_dic = manager.dict()
         for i in range(self.K):
-            p = Process(target=self.do_method, args=(i,score_dic,parms))
+            p = Process(target=self.do_method, args=(i,score_dic))
             jobs.append(p)
         [x.start() for x in jobs]
         [x.join() for x in jobs]
@@ -572,8 +598,8 @@ class CrossValidation():
         return a
 
     # 並列計算用のCV関数
-    def do_method(self,data,dic,parms):
-        result = self.method_func(data,parms)
+    def do_method(self,data,dic):
+        result = self.method_func(data)
         dic[result] = result
 
     #メゾッド選択用関数
@@ -611,13 +637,13 @@ class CrossValidation():
             print('メゾッドを選択してください')
             return -1
 
-def all_CV(number=5,method=None,parms=None):
+def all_CV(number=5,method=None):
     print('CV開始いたします')
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
         for i in ['A', 'B', 'C', 'D']:
             a=CrossValidation(i,K=5,method=method)
-            scores[i]+=a.CV_multi(parms)
+            scores[i]+=a.CV_multi()
     print(str(number) + '回平均結果')
     for i in ['A', 'B', 'C', 'D']:
         scores[i]/=number
@@ -635,23 +661,26 @@ def result_weight_mean(result):
     return score
 
 def baysian_optimazation_for_fm():
-    bounds = [{'name': 'alpha', 'type': 'continuous', 'domain': (0, 1.0)},
-              {'name': 'l1', 'type': 'continuous', 'domain': (0, 1.0)},
-              {'name': 'n_comp', 'type': 'discrete', 'domain': (2,4,8,16,32,64,128,256)},
-              {'name': 'iter', 'type': 'discrete', 'domain': (100,200,400,600,1000)},
-              {'name': 'tol', 'type': 'discrete', 'domain': (0.001,0.0001,0.00001)},]
+    bounds = [{'name': 'min_weight', 'type': 'continuous', 'domain': (0.0,2.0)},
+              {'name': 'n_comp', 'type': 'discrete', 'domain': (128,128)},
+              {'name': 'iter', 'type': 'discrete', 'domain': (512,1024)},
+              {'name': 'tol', 'type': 'discrete', 'domain': (0.001,0.001)},
+              {'name': 'num', 'type': 'discrete', 'domain': (19,20,21,22)},]
 
-    a = CrossValidation('B', K=5, method=9)
+
 
     # 事前探索を行います。
-    opt_mnist = GPyOpt.methods.BayesianOptimization(f=a.CV_multi, domain=bounds,initial_design_numdata=10,verbosity=True)
+    opt_mnist = GPyOpt.methods.BayesianOptimization(f=bay_opt, domain=bounds,initial_design_numdata=10,verbosity=True)
 
     # 最適なパラメータを探索します。
     opt_mnist.run_optimization(max_iter=30,verbosity=True)
     print("optimized parameters: {0}".format(opt_mnist.x_opt))
     print("optimized loss: {0}".format(opt_mnist.fx_opt))
+def bay_opt(x):
+    a = CrossValidation('B', K=5, method=11,x=x)
+    return a.CV_multi()
 
 
 if __name__=='__main__':
-    #all_CV(1,12)
+    #all_CV(1,10)
     baysian_optimazation_for_fm()

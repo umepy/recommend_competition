@@ -23,9 +23,11 @@ class Predict():
         self.id_dic={}
         for name in ['A','B','C','D']:
             self.personal_train[name]=pd.read_pickle('../data/personal/personal_'+name+'.pickle')
-            with open('../data/matrix/all_weighted_' + name + '.pickle', 'rb') as f:
+            if name=='D':
+                continue
+            with open('../data/matrix/all_optimized_' + name + '.pickle', 'rb') as f:
                 self.sparse_data[name] = pickle.load(f)
-            with open('../data/matrix/all_id_dic_weighted_' + name + '.pickle', 'rb') as f:
+            with open('../data/matrix/all_id_dic_optimized_' + name + '.pickle', 'rb') as f:
                 self.id_dic[name] = pickle.load(f)
 
         #予測用idの読み込み
@@ -183,15 +185,19 @@ class Predict():
     def method11_past_and_collaborate(self, name, test_ids):
         with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
             time_weight = pickle.load(f)
+        parm_dic = {'A': {'conv': 0, 'click': 0.20701892, 'view': 0.78720054, 'cart': 0.19557122},
+                    'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
+                    'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
+                    'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
         if name != 'D':
             with open('../data/matrix/all_time_weighted_' + name + '.pickle', 'rb') as f:
                 sparse_data = pickle.load(f)
             with open('../data/matrix/all_id_dic_time_weighted_' + name + '.pickle', 'rb') as f:
                 id_dic = pickle.load(f)
-            model = NMF(n_components=100)
+            model = NMF(n_components=128,max_iter=1024,tol=0.001)
             user_feature_matrix = model.fit_transform(sparse_data)
             item_feature_matrix = model.components_
-            nmf_number_min=6
+            nmf_number_min=0
         test_min = datetime.datetime(year=2017, month=5, day=1)
         predict_test = {}
         for i in tqdm.tqdm(test_ids):
@@ -205,11 +211,13 @@ class Predict():
                 for _, row in self.personal_train[name][i][
                             self.personal_train[name][i]['product_id'] == j].iterrows():
                     if row['event_type'] == 1:
-                        tmp_dict[j] += 3 * time_weight[-1 * (row['time_stamp'] - test_min).days]
+                        tmp_dict[j] += parm_dic[name]['view'] * time_weight[-1 * (row['time_stamp'] - test_min).days]
                     elif row['event_type'] == 0:
-                        tmp_dict[j] += 2 * time_weight[-1 * (row['time_stamp'] - test_min).days]
+                        tmp_dict[j] += parm_dic[name]['cart'] * time_weight[-1 * (row['time_stamp'] - test_min).days]
                     elif row['event_type'] == 2:
-                        tmp_dict[j] += 1 * time_weight[-1 * (row['time_stamp'] - test_min).days]
+                        tmp_dict[j] += parm_dic[name]['click'] * time_weight[-1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 3:
+                        tmp_dict[j] += parm_dic[name]['conv'] * time_weight[-1 * (row['time_stamp'] - test_min).days]
 
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
             sorted_list = [x for x, y in sorted_list]
@@ -244,7 +252,7 @@ class Predict():
         predict_ids={}
         for i in ['A','B','C','D']:
             print(i)
-            predict_ids[i]=self.method10_time_weight(i, self.submit_ids[i])
+            predict_ids[i]=self.method11_past_and_collaborate(i, self.submit_ids[i])
 
         submit_list=[]
         for i in ['A','B','C','D']:

@@ -181,14 +181,9 @@ NMFの要素数
 * D - 0.1624
 
 
-## FMを用いる際の注意点
-* yの値はどうするのか？　-　最大のイベント値？　時間減衰をかけるのか？
-
-## 推薦用ライブラリ
-* Surprise - 様ざまな推薦手法が入ったもの
-* pyFM - Factalization Machineに特化したライブラリ
-* fastFM - scikit-learn風に書くFactorization Machineライブラリ．コアの計算はC実装のライブラリで高速化．
-* pywFM - Steffen RendleのlibFMのPythonラッパー
+## 今後の方針
+1. 順位付けを変化させることでのスコア向上
+2. ユーザのクラスタリング（特徴生成）を行い，重み付けを変化させることでのスコア向上
 
 ## ユーザー数とアイテム数
 * A - 52,755人,  11,126 items

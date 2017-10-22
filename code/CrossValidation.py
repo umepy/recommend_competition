@@ -23,6 +23,7 @@ from sklearn.ensemble import RandomForestRegressor
 import csv
 import GPyOpt
 import cudamat as cm
+from imblearn.ensemble import BalancedBaggingClassifier
 
 
 class CrossValidation():
@@ -40,8 +41,8 @@ class CrossValidation():
             self.item_feature_matrix = model.components_
         if method==11:
             print(x)
-            self.min_weight,n_comp, iter_num, tol,self.min_num= float(x[:,0]),int(x[:, 1]), int(x[:, 2]), float(x[:, 3]),int(x[:, 4])
-            self.model = NMF(n_components=n_comp, max_iter=iter_num,tol=tol)
+            self.min_weight= float(x[:,0])
+            self.model = NMF(n_components=128, max_iter=1024,tol=0.001)
             self.user_feature_matrix = self.model.fit_transform(self.sparse_data)
         if method==12:
             print('learn start')
@@ -73,12 +74,30 @@ class CrossValidation():
 
             print('learn finished')
         if method==13:
-            with open('../data/ml/ml_train_adconv_X_' + self.name + '.pickle', 'rb') as f:
-                r_X = pickle.load(f)
-            with open('../data/ml/ml_train_adconv_y_' + self.name + '.pickle', 'rb') as f:
-                r_y = pickle.load(f)
-            self.model = RandomForestRegressor(n_estimators=100, n_jobs=8)
-            self.model.fit(r_X, r_y)
+            with open('../data/conv_pred/train_data_' + 'A' + '.pickle', 'rb') as f:
+                data = pickle.load(f)
+            with open('../data/conv_pred/train_X_' + 'A' + '.pickle', 'rb') as f:
+                self.name_dic_train = pickle.load(f)
+            self.v = DictVectorizer()
+            X = self.v.fit_transform(data['X'])
+            y = np.array(data['y'])
+
+            self.model = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+            self.model.fit(X, y)
+        if method==14:
+            self.nmf = NMF(n_components=128, max_iter=1024, tol=0.001)
+            self.user_feature_matrix = self.nmf.fit_transform(self.sparse_data)
+            if self.name!='D':
+                with open('../data/conv_pred/train_data_' + self.name + '.pickle', 'rb') as f:
+                    data = pickle.load(f)
+                with open('../data/conv_pred/train_X_' + self.name + '.pickle', 'rb') as f:
+                    self.name_dic_train = pickle.load(f)
+                self.v = DictVectorizer()
+                X = self.v.fit_transform(data['X'])
+                y = np.array(data['y'])
+
+                self.model = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                self.model.fit(X, y)
 
     #データを読み込み分割
     def read_data(self):
@@ -394,7 +413,7 @@ class CrossValidation():
     # 方法10 - 方法7に時間重みを加えた推薦法
     def method10_time_weight(self, num):
         # ベイズ最適化結果の読み込み
-        parm_dic={'A': {'conv': 0, 'click': 0, 'view': 0.95845924, 'cart': 0.22327048},
+        parm_dic={'A': {'conv': -100, 'click': 0, 'view': 0.95845924, 'cart': 0.22327048},
              'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
              'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
              'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
@@ -452,32 +471,39 @@ class CrossValidation():
             if i not in time_r_dic.keys():
                 continue
 
-            sorted_list=time_r_dic[i]['items']
+            past_r_id = time_r_dic[i]['items']
+            past_r_im = time_r_dic[i]['importance']
 
-            if len(sorted_list)>=self.min_num:
-                sorted_list = []
-                for i_rank in range(len(time_r_dic[i]['items'])):
-                    if time_r_dic[i]['importance'][i_rank]>self.min_weight:
-                        sorted_list.append(time_r_dic[i]['items'][i_rank])
-            if len(sorted_list)<22 - nmf_number:
-                nmf_number=22-len(sorted_list)
+            # if len(sorted_list)>=self.min_num:
+            #     sorted_list = []
+            #     for i_rank in range(len(time_r_dic[i]['items'])):
+            #         if time_r_dic[i]['importance'][i_rank]>self.min_weight:
+            #             sorted_list.append(time_r_dic[i]['items'][i_rank])
+
             #est_user_eval = np.dot(self.user_feature_matrix[self.id_dic['user_id'].index(i)], item_feature_matrix)
             index_user=self.id_dic['user_id'].index(i)
             nmf_result = cm.dot(cm.CUDAMatrix(self.user_feature_matrix[index_user:index_user + 1]),cm.CUDAMatrix(item_feature_matrix)).asarray()
             est_user_eval=nmf_result[0]
+
+            # 2-way marge
+            est_user_eval*=self.min_weight
+            for tmp_id in past_r_id:
+                est_user_eval[self.id_dic['product_id'].index(tmp_id)]+=past_r_im[past_r_id.index(tmp_id)]
+
+
             tmp = sorted(zip(est_user_eval, self.id_dic['product_id']), key=lambda x: x[0], reverse=True)
             predict = list(zip(*tmp))[1]
 
-            add_list=[]
-            num=0
-            while len(add_list)!=nmf_number:
-                if predict[num] not in sorted_list:
-                    add_list.append(predict[num])
-                num+=1
-            if len(sorted_list) > 22 - nmf_number:
-                sorted_list = sorted_list[:22-nmf_number]
-            sorted_list.extend(add_list)
-            predict_test[i] = sorted_list
+            # add_list=[]
+            # num=0
+            # while len(add_list)!=nmf_number:
+            #     if predict[num] not in sorted_list:
+            #         add_list.append(predict[num])
+            #     num+=1
+            # if len(sorted_list) > 22 - nmf_number:
+            #     sorted_list = sorted_list[:22-nmf_number]
+            # sorted_list.extend(add_list)
+            predict_test[i] = predict[:22]
         return self.evaluate(predict_test)
 
     # 方法12 - FMを用いた推薦法
@@ -535,46 +561,148 @@ class CrossValidation():
 
     # 方法13 - MLを用いた推薦法
     def method13_random_forest(self, num):
+        # ベイズ最適化結果の読み込み
+        parm_dic = {'A': {'conv': -100, 'click': 0, 'view': 0.95845924, 'cart': 0.22327048},
+                    'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
+                    'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
+                    'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
+
         with open('../data/time_weight/fitting_balanced_' + self.name + '.pickle', 'rb') as f:
             time_weight = pickle.load(f)
-        test_ids = self.cv_tests[num]
-        #test_ids = test_ids
         test_min = datetime.datetime(year=2017, month=4, day=24)
+        test_ids = self.cv_tests[num]
         predict_test = {}
-        for user in tqdm.tqdm(test_ids):
+        importance = {}
+        for i in tqdm.tqdm(test_ids):
             # ユニークitem idを取得
             tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
 
-            past_items = pd.unique(self.personal_train[user]['product_id'])
-            for item in past_items:
-                user_dic = {'cart': 0, 'view': 0, 'click': 0, 'conv': 0, 'first_day': 0,
-                            'last_day': 30, 'event_num': 0}
-                for _, row in self.personal_train[user][self.personal_train[user]['product_id'] == item].iterrows():
-                    user_dic['event_num'] += 1
-
-                    day = -1 * (row['time_stamp'] - test_min).days
-
-                    if row['event_type'] == 0:
-                        user_dic['cart'] += 1 * time_weight[day]
-                    elif row['event_type'] == 1:
-                        user_dic['view'] += 1 * time_weight[day]
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for _, row in self.personal_train[i][self.personal_train[i]['product_id'] == j].iterrows():
+                    if row['event_type'] == 3:
+                        tmp_dict[j] += parm_dic[self.name]['conv'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
                     elif row['event_type'] == 2:
-                        user_dic['click'] += 1 * time_weight[day]
-                    elif row['event_type'] == 3:
-                        user_dic['conv'] += 1 * time_weight[day]
+                        tmp_dict[j] += parm_dic[self.name]['click'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 1:
+                        tmp_dict[j] += parm_dic[self.name]['view'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 0:
+                        tmp_dict[j] += parm_dic[self.name]['cart'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
 
-                    if day > user_dic['first_day']:
-                        user_dic['first_day'] = day
-                    if day < user_dic['last_day']:
-                        user_dic['last_day'] = day
-                ml_data = [[user_dic['cart'], user_dic['view'], user_dic['click'], user_dic['conv'],
-                           user_dic['first_day'], user_dic['last_day'], user_dic['event_num']]]
-                p = self.model.predict(ml_data)
-                tmp_dict[item] = p[0]
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            sorted_list = [x for x, y in sorted_list]
+            sorted_list2=[]
+            #importance[i] = [y for x, y in sorted_list]
+
+            # randamforest input data
+            input_data=[]
+            for k in sorted_list:
+                if len(self.name_dic_train[i][k]) != 0:
+                    sorted_list2.append(k)
+                    input_data.append(self.name_dic_train[i][k])
+            if len(input_data)!=0:
+                X=self.v.transform(input_data)
+                pred=self.model.predict_proba(X)
+                pred=pred[:,1]
+                conv_list=[]
+                mysort=sorted(zip(sorted_list2,pred),key=lambda x:x[1],reverse=True)
+                for k in range(len(mysort)):
+                    if mysort[k][1]>=0.8:
+                        conv_list.append(mysort[k][0])
+                for k in sorted_list:
+                    if k not in conv_list:
+                        conv_list.append(k)
+                sorted_list=conv_list
+
             if len(sorted_list) > 22:
                 sorted_list = sorted_list[:22]
-            predict_test[user] = [x for x, y in sorted_list]
+            predict_test[i]=sorted_list
+
+        return self.evaluate(predict_test)
+
+    # 方法14 - 過去と協調のハイブリッド+RandomForest推薦手法
+    def method14_past_and_collaborate(self, num):
+        # GPUを用いて行列演算（初期化）
+        cm.cuda_set_device(0)
+        cm.init()
+        parm_dic = {'A': {'conv': 0, 'click': 0, 'view': 0.95845924, 'cart': 0.22327048},
+                    'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
+                    'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
+                    'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
+
+        with open('../data/time_weight/fitting_balanced_' + self.name + '.pickle', 'rb') as f:
+            time_weight = pickle.load(f)
+        test_min = datetime.datetime(year=2017, month=4, day=24)
+        item_feature_matrix = self.nmf.components_
+        test_ids = self.cv_tests[num]
+        predict_test = {}
+        for i in tqdm.tqdm(test_ids):
+            if i not in self.id_dic['user_id']:
+                continue
+
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for _, row in self.personal_train[i][self.personal_train[i]['product_id'] == j].iterrows():
+                    if row['event_type'] == 3:
+                        tmp_dict[j] += parm_dic[self.name]['conv'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 2:
+                        tmp_dict[j] += parm_dic[self.name]['click'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 1:
+                        tmp_dict[j] += parm_dic[self.name]['view'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 0:
+                        tmp_dict[j] += parm_dic[self.name]['cart'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
+
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            sorted_list = [x for x, y in sorted_list]
+            sorted_list2 = []
+            input_data = []
+            for k in sorted_list:
+                if len(self.name_dic_train[i][k]) != 0:
+                    sorted_list2.append(k)
+                    input_data.append(self.name_dic_train[i][k])
+            if len(input_data) != 0 and self.name!='D':
+                X = self.v.transform(input_data)
+                pred = self.model.predict_proba(X)
+                pred = pred[:, 1]
+                conv_list = []
+                mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
+                for k in range(len(mysort)):
+                    if mysort[k][1] >= 0.5:
+                        conv_list.append(mysort[k][0])
+                for k in sorted_list:
+                    if k not in conv_list:
+                        conv_list.append(k)
+                sorted_list = conv_list
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
+
+            amari=22-len(sorted_list)
+            if amari>0:
+                index_user = self.id_dic['user_id'].index(i)
+                nmf_result = cm.dot(cm.CUDAMatrix(self.user_feature_matrix[index_user:index_user + 1]),
+                                    cm.CUDAMatrix(item_feature_matrix)).asarray()
+                est_user_eval = nmf_result[0]
+
+                # 2-way marge
+                nmf_sort=list(zip(*sorted(zip(self.id_dic['product_id'],est_user_eval),key=lambda x:x[1],reverse=True)))[0]
+                sorted_list.extend(nmf_sort[:amari])
+
+            predict_test[i] = sorted_list
         return self.evaluate(predict_test)
 
     # Cross-validationの実行
@@ -633,19 +761,23 @@ class CrossValidation():
             return self.method12_fm_original
         elif num == 13:
             return self.method13_random_forest
+        elif num==14:
+            return self.method14_past_and_collaborate
         else:
             print('メゾッドを選択してください')
             return -1
 
 def all_CV(number=5,method=None):
+    #names=['A', 'B', 'C', 'D']
+    names=['A','B','C']
     print('CV開始いたします')
     scores={'A':0,'B':0,'C':0,'D':0}
     for _ in range(number):
-        for i in ['A', 'B', 'C', 'D']:
+        for i in names:
             a=CrossValidation(i,K=5,method=method)
             scores[i]+=a.CV_multi()
     print(str(number) + '回平均結果')
-    for i in ['A', 'B', 'C', 'D']:
+    for i in names:
         scores[i]/=number
         print(i + '\t' + str(scores[i]))
 
@@ -661,16 +793,12 @@ def result_weight_mean(result):
     return score
 
 def baysian_optimazation_for_fm():
-    bounds = [{'name': 'min_weight', 'type': 'continuous', 'domain': (0.0,2.0)},
-              {'name': 'n_comp', 'type': 'discrete', 'domain': (128,128)},
-              {'name': 'iter', 'type': 'discrete', 'domain': (512,1024)},
-              {'name': 'tol', 'type': 'discrete', 'domain': (0.001,0.001)},
-              {'name': 'num', 'type': 'discrete', 'domain': (19,20,21,22)},]
+    bounds = [{'name': 'min_weight', 'type': 'continuous', 'domain': (0,10)}]
 
 
 
     # 事前探索を行います。
-    opt_mnist = GPyOpt.methods.BayesianOptimization(f=bay_opt, domain=bounds,initial_design_numdata=10,verbosity=True)
+    opt_mnist = GPyOpt.methods.BayesianOptimization(f=bay_opt, domain=bounds,initial_design_numdata=5,verbosity=True)
 
     # 最適なパラメータを探索します。
     opt_mnist.run_optimization(max_iter=30,verbosity=True)
@@ -682,5 +810,5 @@ def bay_opt(x):
 
 
 if __name__=='__main__':
-    #all_CV(1,10)
-    baysian_optimazation_for_fm()
+    all_CV(1,14)
+    #baysian_optimazation_for_fm()

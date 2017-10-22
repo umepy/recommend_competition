@@ -12,6 +12,8 @@ import tqdm
 import math
 import datetime
 from sklearn.decomposition import NMF
+from imblearn.ensemble import BalancedBaggingClassifier
+from sklearn.feature_extraction import DictVectorizer
 
 class Predict():
     def __init__(self):
@@ -181,7 +183,7 @@ class Predict():
             predict_test[i] = [x for x, y in sorted_list]
         return predict_test
 
-    # 方法10 - 過去とNMFのハイブリッド推薦
+    # 方法11 - 過去とNMFのハイブリッド推薦
     def method11_past_and_collaborate(self, name, test_ids):
         with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
             time_weight = pickle.load(f)
@@ -247,12 +249,108 @@ class Predict():
                 predict_test[i] = sorted_list
         return predict_test
 
+    # 方法12 - 過去とNMFのハイブリッド+randomforest推薦
+    def method12_hybrid_forest(self, name, test_ids):
+        with open('../data/time_weight/fitting_balanced_' + name + '.pickle', 'rb') as f:
+            time_weight = pickle.load(f)
+        parm_dic = {'A': {'conv': 0, 'click': 0.20701892, 'view': 0.78720054, 'cart': 0.19557122},
+                    'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
+                    'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
+                    'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
+        if name != 'D':
+            with open('../data/matrix/all_time_weighted_' + name + '.pickle', 'rb') as f:
+                sparse_data = pickle.load(f)
+            with open('../data/matrix/all_id_dic_time_weighted_' + name + '.pickle', 'rb') as f:
+                id_dic = pickle.load(f)
+            model = NMF(n_components=128, max_iter=1024, tol=0.001)
+            user_feature_matrix = model.fit_transform(sparse_data)
+            item_feature_matrix = model.components_
+            with open('../data/conv_pred/train_data_' + name + '.pickle', 'rb') as f:
+                data = pickle.load(f)
+            with open('../data/conv_pred/test_X_' + name + '.pickle', 'rb') as f:
+                name_dic_train = pickle.load(f)
+            v = DictVectorizer()
+            X = v.fit_transform(data['X'])
+            y = np.array(data['y'])
+
+            forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+            forest.fit(X, y)
+        test_min = datetime.datetime(year=2017, month=5, day=1)
+        predict_test = {}
+        for i in tqdm.tqdm(test_ids):
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[name][i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = 0
+                for _, row in self.personal_train[name][i][
+                            self.personal_train[name][i]['product_id'] == j].iterrows():
+                    if row['event_type'] == 1:
+                        tmp_dict[j] += parm_dic[name]['view'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 0:
+                        tmp_dict[j] += parm_dic[name]['cart'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 2:
+                        tmp_dict[j] += parm_dic[name]['click'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
+                    elif row['event_type'] == 3:
+                        tmp_dict[j] += parm_dic[name]['conv'] * time_weight[
+                            -1 * (row['time_stamp'] - test_min).days]
+
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            sorted_list = [x for x, y in sorted_list]
+            if name == 'D':
+                if len(sorted_list) > 22:
+                    sorted_list = sorted_list[:22]
+                predict_test[i] = sorted_list
+            else:
+                sorted_list2 = []
+                input_data = []
+                for k in sorted_list:
+                    if len(name_dic_train[i][k]) != 0:
+                        sorted_list2.append(k)
+                        input_data.append(name_dic_train[i][k])
+                if len(input_data) != 0:
+                    X = v.transform(input_data)
+                    pred = forest.predict_proba(X)
+                    pred = pred[:, 1]
+                    conv_list = []
+                    mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
+                    for k in range(len(mysort)):
+                        if mysort[k][1] >= 0.5:
+                            conv_list.append(mysort[k][0])
+                    for k in sorted_list:
+                        if k not in conv_list:
+                            conv_list.append(k)
+                    sorted_list = conv_list
+                if len(sorted_list) < 22 - nmf_number:
+                    nmf_number = 22 - len(sorted_list)
+
+                est_user_eval = np.dot(user_feature_matrix[id_dic['user_id'].index(i)], item_feature_matrix)
+                tmp = sorted(zip(est_user_eval, id_dic['product_id']), key=lambda x: x[0], reverse=True)
+                predict = list(zip(*tmp))[1]
+
+                add_list = []
+                num = 0
+                while len(add_list) != nmf_number:
+                    if predict[num] not in sorted_list:
+                        add_list.append(predict[num])
+                    num += 1
+                if len(sorted_list) > 22 - nmf_number:
+                    sorted_list = sorted_list[:22 - nmf_number]
+                sorted_list.extend(add_list)
+                predict_test[i] = sorted_list
+        return predict_test
+
     def all_predict(self):
         print('予測開始します')
         predict_ids={}
         for i in ['A','B','C','D']:
             print(i)
-            predict_ids[i]=self.method11_past_and_collaborate(i, self.submit_ids[i])
+            predict_ids[i]=self.method12_hybrid_forest(i, self.submit_ids[i])
 
         submit_list=[]
         for i in ['A','B','C','D']:

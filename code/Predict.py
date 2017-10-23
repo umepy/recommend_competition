@@ -273,7 +273,7 @@ class Predict():
             X = v.fit_transform(data['X'])
             y = np.array(data['y'])
 
-            forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+            forest = BalancedBaggingClassifier(n_estimators=500, n_jobs=1)
             forest.fit(X, y)
         test_min = datetime.datetime(year=2017, month=5, day=1)
         predict_test = {}
@@ -307,41 +307,42 @@ class Predict():
                     sorted_list = sorted_list[:22]
                 predict_test[i] = sorted_list
             else:
-                sorted_list2 = []
-                input_data = []
-                for k in sorted_list:
-                    if len(name_dic_train[i][k]) != 0:
-                        sorted_list2.append(k)
-                        input_data.append(name_dic_train[i][k])
-                if len(input_data) != 0:
-                    X = v.transform(input_data)
-                    pred = forest.predict_proba(X)
-                    pred = pred[:, 1]
-                    conv_list = []
-                    mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
-                    for k in range(len(mysort)):
-                        if mysort[k][1] >= 0.5:
-                            conv_list.append(mysort[k][0])
+                if name!='C':
+                    sorted_list2 = []
+                    input_data = []
                     for k in sorted_list:
-                        if k not in conv_list:
-                            conv_list.append(k)
-                    sorted_list = conv_list
-                if len(sorted_list) < 22 - nmf_number:
-                    nmf_number = 22 - len(sorted_list)
+                        if len(name_dic_train[i][k]) != 0:
+                            sorted_list2.append(k)
+                            input_data.append(name_dic_train[i][k])
+                    if len(input_data) != 0:
+                        X = v.transform(input_data)
+                        pred = forest.predict_proba(X)
+                        pred = pred[:, 1]
+                        conv_list = []
+                        mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
+                        for k in range(len(mysort)):
+                            if mysort[k][1] >= 0.5:
+                                conv_list.append(mysort[k][0])
+                        for k in sorted_list:
+                            if k not in conv_list:
+                                conv_list.append(k)
+                        sorted_list = conv_list
+                if len(sorted_list) > 22:
+                    sorted_list = sorted_list[:22]
+                nmf_number=22-len(sorted_list)
 
-                est_user_eval = np.dot(user_feature_matrix[id_dic['user_id'].index(i)], item_feature_matrix)
-                tmp = sorted(zip(est_user_eval, id_dic['product_id']), key=lambda x: x[0], reverse=True)
-                predict = list(zip(*tmp))[1]
+                if nmf_number>0:
+                    est_user_eval = np.dot(user_feature_matrix[id_dic['user_id'].index(i)], item_feature_matrix)
+                    tmp = sorted(zip(est_user_eval, id_dic['product_id']), key=lambda x: x[0], reverse=True)
+                    predict = list(zip(*tmp))[1]
 
-                add_list = []
-                num = 0
-                while len(add_list) != nmf_number:
-                    if predict[num] not in sorted_list:
-                        add_list.append(predict[num])
-                    num += 1
-                if len(sorted_list) > 22 - nmf_number:
-                    sorted_list = sorted_list[:22 - nmf_number]
-                sorted_list.extend(add_list)
+                    add_list = []
+                    num = 0
+                    while len(add_list) != nmf_number:
+                        if predict[num] not in sorted_list:
+                            add_list.append(predict[num])
+                        num += 1
+                    sorted_list.extend(add_list)
                 predict_test[i] = sorted_list
         return predict_test
 

@@ -48,21 +48,23 @@ def conversion_data(name,keys,rt_data):
         time_weight = pickle.load(f)
 
     train_users={}
-    dic_default={'score_conv':0,
-                 'score_click': 0,
-                 'score_view': 0,
-                 'score_cart': 0,
-                 'is_other_item_check': 0,
-                 'day_item_per': 0,
-                 'day_event_per': 0,
-                 'continue_event': 0,
-                 'is_last_event': 0,
-                 'unique_item_num': 0,
-                 'event_num': 0,
-                 'conv_num': 0,
-                 'time_length': 0,
-                 'last_event_type': 0,
-                 'is_conved': 0,
+    dic_default={'score_conv':0,            # weight conv
+                 'score_click': 0,          # weight click
+                 'score_view': 0,           # weight view
+                 'score_cart': 0,           # weight cart
+                 'is_other_item_check': 0,  #
+                 'day_item_per': 0,         #
+                 'day_event_per': 0,        #
+                 'continue_event': 0,       #
+                 'is_last_event': 0,        #
+                 'unique_item_num': 0,      #
+                 'event_num': 0,            #
+                 'conv_num': 0,             #
+                 'time_length': 0,          #
+                 'last_event_type': 0,      #
+                 'is_conved': 0,            #
+                 'percentage_conv':0,       #
+                 'percentage_uni_item': 0,  #
                  }
     test_min = datetime.datetime(year=2017, month=4, day=24)
 
@@ -111,6 +113,8 @@ def conversion_data(name,keys,rt_data):
             item_dic['unique_item_num']=item_num
             item_dic['conv_num'] = conv_num
             item_dic['event_num'] = event_num
+            item_dic['percentage_conv']=conv_num/float(event_num)
+            item_dic['percentage_unique_item'] = item_num / float(event_num)
 
             train_items[item]=item_dic
 
@@ -134,7 +138,7 @@ def datacreate_test_multi(name):
     output={}
     for i in t_data:
         output.update(i)
-    with open('../data/conv_pred/test_X_'+name+'.pickle','wb') as f:
+    with open('../data/conv_pred/test_X_cut_'+name+'.pickle','wb') as f:
         pickle.dump(output,f)
 
 # コンバージョンされるかどうかのデータ
@@ -166,6 +170,7 @@ def conversion_test_data(name,keys,rt_data):
         train_items={}
         user_data=train[user]
         user_data=user_data.sort_values('time_stamp')
+        user_data=user_data[user_data['time_stamp']>datetime.datetime(year=2017, month=4, day=7)]
         final_event=user_data.max()[4]
         conv_num=len(user_data[user_data['event_type']==3])
         event_num=len(user_data)
@@ -288,4 +293,5 @@ def eval(test,pred):
                 true_true+=1
     return score/s_count, true_true/t_count
 
-cross_validation('C')
+datacreate_test_multi('A')
+datacreate_test_multi('B')

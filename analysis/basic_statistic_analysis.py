@@ -94,6 +94,16 @@ def extract_personaldata(name,data):
     with open('../data/personal/personal_'+name+'.pickle','wb') as f:
         pickle.dump(DataFrameDict,f)
 
+# 各アイテムのデータを抽出
+def extract_itemdata(name):
+    data=read_data(name)
+    unique = data.product_id.unique()
+    DataFrameDict = {elem: pd.DataFrame for elem in unique}
+    for key in tqdm.tqdm(DataFrameDict.keys()):
+        DataFrameDict[key] = data[:][data.product_id == key]
+    with open('../data/personal/item_' + name + '.pickle', 'wb') as f:
+        pickle.dump(DataFrameDict, f)
+
 # 個人のデータをA,B,C,D全てで抽出
 def extract_all():
     for i in ('A','B','C','D'):
@@ -1198,4 +1208,4 @@ def baysian_optimazation_for_fm():
 
 if __name__=='__main__':
     #create_evaluate_matrix_optimize('C')
-    all_evaluate_matrix_optimized('D')
+    extract_itemdata('B')

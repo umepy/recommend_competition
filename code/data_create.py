@@ -38,7 +38,7 @@ def datacreate_multi(name):
     output={}
     for i in t_data:
         output.update(i)
-    with open('../data/conv_pred/train_X_'+name+'.pickle','wb') as f:
+    with open('../data/conv_pred/train_X2_'+name+'.pickle','wb') as f:
         pickle.dump(output,f)
 
 # コンバージョンされるかどうかのデータ
@@ -46,25 +46,33 @@ def conversion_data(name,keys,rt_data):
     train = pd.read_pickle('../data/personal/personal_train_' + name + '.pickle')
     with open('../data/time_weight/fitting_balanced_'+name+'.pickle','rb') as f:
         time_weight = pickle.load(f)
+    with open('../data/personal/item_' + name + '.pickle', 'rb') as f:
+        item_dic_data=pickle.load(f)
 
     train_users={}
     dic_default={'score_conv':0,            # weight conv
                  'score_click': 0,          # weight click
                  'score_view': 0,           # weight view
                  'score_cart': 0,           # weight cart
-                 'is_other_item_check': 0,  #
-                 'day_item_per': 0,         #
-                 'day_event_per': 0,        #
-                 'continue_event': 0,       #
-                 'is_last_event': 0,        #
-                 'unique_item_num': 0,      #
-                 'event_num': 0,            #
-                 'conv_num': 0,             #
-                 'time_length': 0,          #
-                 'last_event_type': 0,      #
-                 'is_conved': 0,            #
-                 'percentage_conv':0,       #
-                 'percentage_uni_item': 0,  #
+                 'day_item_per': 0,         # None - 同じ日の商品割合
+                 'day_event_per': 0,        # None - 同じ日のイベント割合
+                 'continue_event': 0,       # 連続イベント数
+                 'is_last_event': 0,        # その人の最終イベントか？
+                 'unique_item_num': 0,      # ユニークアイテム数
+                 'event_num': 0,            # イベント数
+                 'conv_num': 0,             # 購入数
+                 'time_length': 0,          # 最終イベントがどれくらい離れているか
+                 'last_event_type': 0,      # 最終イベントタイプ
+                 'is_conved': 0,            # 今までで購入されているか
+                 'percentage_conv':0,       # 購入数 / イベント数
+                 'percentage_uni_item': 0,  # ユニークアイテム数 / イベント数
+                 'item_evented_by_users':0, # その商品に行動を起こしたユーザ数
+                 'item_event_each_users': 0,# その商品の1ユーザーあたりの行動数
+                 'item_conv_num_by_users':0,# その商品の購入数
+                 'item_conved_by_event': 0, # その商品の購入されている割合 (conv / event)
+                 'item_conved_by_users': 0, # その商品の購入されている割合 (conv / user)
+                 'hot_item_by_users':0,     # 流行の購入される商品なのか？ (conv * time_weight)
+                 'hot_item_each_users': 0,  # 流行の購入される商品なのか？ (conv * time_weight) / user_num
                  }
     test_min = datetime.datetime(year=2017, month=4, day=24)
 
@@ -116,6 +124,23 @@ def conversion_data(name,keys,rt_data):
             item_dic['percentage_conv']=conv_num/float(event_num)
             item_dic['percentage_unique_item'] = item_num / float(event_num)
 
+            # item 固有の情報
+            tmp_item_dic=item_dic_data[item]
+            tmp_item_dic=tmp_item_dic[tmp_item_dic['time_stamp']<test_min]
+            user_num=len(pd.unique(tmp_item_dic['user_id']))
+            event_num=len(tmp_item_dic)
+            conv_num=len(tmp_item_dic[tmp_item_dic['event_type']==3])
+            item_dic['item_evented_by_users']= user_num
+            item_dic['item_event_each_users'] = event_num/user_num
+            item_dic['item_conv_num_by_users'] = conv_num
+            item_dic['item_conved_by_event'] = conv_num/event_num
+            item_dic['item_conved_by_users'] = conv_num/user_num
+
+            tmp_item_dic=tmp_item_dic[tmp_item_dic['event_type']==3]
+            for _,row in tmp_item_dic.iterrows():
+                item_dic['hot_item_by_users'] += time_weight[(test_min - row['time_stamp']).days]
+            item_dic['hot_item_each_users']=item_dic['hot_item_by_users']/user_num
+
             train_items[item]=item_dic
 
         train_users[user]=train_items
@@ -146,6 +171,8 @@ def conversion_test_data(name,keys,rt_data):
     train = pd.read_pickle('../data/personal/personal_' + name + '.pickle')
     with open('../data/time_weight/fitting_balanced_'+name+'.pickle','rb') as f:
         time_weight = pickle.load(f)
+    with open('../data/personal/item_' + name + '.pickle', 'rb') as f:
+        item_dic_data=pickle.load(f)
 
     train_users={}
     dic_default={'score_conv':0,
@@ -213,6 +240,25 @@ def conversion_test_data(name,keys,rt_data):
             item_dic['conv_num'] = conv_num
             item_dic['event_num'] = event_num
 
+            item_dic['percentage_conv'] = conv_num / float(event_num)
+            item_dic['percentage_unique_item'] = item_num / float(event_num)
+
+            # item 固有の情報
+            tmp_item_dic = item_dic_data[item]
+            user_num = len(pd.unique(tmp_item_dic['user_id']))
+            event_num = len(tmp_item_dic)
+            conv_num = len(tmp_item_dic[tmp_item_dic['event_type'] == 3])
+            item_dic['item_evented_by_users'] = user_num
+            item_dic['item_event_each_users'] = event_num / user_num
+            item_dic['item_conv_num_by_users'] = conv_num
+            item_dic['item_conved_by_event'] = conv_num / event_num
+            item_dic['item_conved_by_users'] = conv_num / user_num
+
+            tmp_item_dic = tmp_item_dic[tmp_item_dic['event_type'] == 3]
+            for _, row in tmp_item_dic.iterrows():
+                item_dic['hot_item_by_users'] += time_weight[(test_min - row['time_stamp']).days]
+            item_dic['hot_item_each_users'] = item_dic['hot_item_by_users'] / user_num
+
             train_items[item]=item_dic
 
         train_users[user]=train_items
@@ -222,7 +268,7 @@ def conversion_test_data(name,keys,rt_data):
 # 予測値を作成する関数
 def conversion_y(name):
     test = pd.read_pickle('../data/personal/personal_test_' + name + '.pickle')
-    with open('../data/conv_pred/train_X_'+name+'.pickle', 'rb') as f:
+    with open('../data/conv_pred/train_X2_'+name+'.pickle', 'rb') as f:
         created_data=pickle.load(f)
     train_X=[]
     train_y=[]
@@ -239,7 +285,7 @@ def conversion_y(name):
             else:
                 train_y.append(0)
     output={'X':train_X,'y':train_y}
-    with open('../data/conv_pred/train_data_'+name+'.pickle','wb') as f:
+    with open('../data/conv_pred/train_data2_'+name+'.pickle','wb') as f:
         pickle.dump(output,f)
 
 def randomforest(name):
@@ -252,7 +298,7 @@ def randomforest(name):
     print(model.oob_score_)
 
 def cross_validation(name):
-    with open('../data/conv_pred/train_data_'+name+'.pickle','rb') as f:
+    with open('../data/conv_pred/train_data2_'+name+'.pickle','rb') as f:
         data=pickle.load(f)
     v=DictVectorizer()
     X=v.fit_transform(data['X'])
@@ -260,38 +306,42 @@ def cross_validation(name):
     kf=KFold(n_splits=10)
     fscore=0
     ftscore=0
-    for train_index,test_index in kf.split(X):
+    all_f_value=0
+    for train_index,test_index in tqdm(kf.split(X)):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
         #model = RandomForestClassifier(n_estimators=100, n_jobs=8,class_weight={0:1,1:3000})
-        model = BalancedBaggingClassifier(n_estimators=500,n_jobs=8,verbose=1)
+        model = BalancedBaggingClassifier(n_estimators=500,n_jobs=8)
         model.fit(X_train,y_train)
         predict=model.predict_proba(X_test)
-        score,t_score=eval(y_test,predict)
-        #pprint(sorted(zip(np.mean([est.steps[1][1].feature_importances_ for est in model.estimators_], axis=0),v.feature_names_),key=lambda x:x[0],reverse=True))
-        print('score : ',str(score))
-        print('true_score : ', str(t_score))
-        fscore+=score
-        ftscore+=t_score
+        precision,recall,f_value=eval(y_test,predict)
+        fscore+=precision
+        ftscore+=recall
+        all_f_value+=f_value
+    pprint(sorted(
+        zip(np.mean([est.steps[1][1].feature_importances_ for est in model.estimators_], axis=0), v.feature_names_),
+        key=lambda x: x[0], reverse=True))
     print('\n')
-    print('final score : ',str(fscore/10))
-    print('final true_score : ', str(ftscore / 10))
+    print('final precision : ',str(fscore/10))
+    print('final recall : ', str(ftscore / 10))
+    print('final f-value : ', str(all_f_value / 10))
 
 def eval(test,pred):
-    score=0
-    s_count=0
-    true_true=0
-    t_count=0
+    precision=0
+    p_count=0
+    recall=0
+    r_count=0
     for i in range(len(test)):
         if pred[i][1]>=0.50:
-            s_count+=1
+            p_count+=1
             if test[i]==1:
-                score+=1
+                precision+=1
         if test[i]==1:
-            t_count+=1
+            r_count+=1
             if pred[i][1]>=0.50:
-                true_true+=1
-    return score/s_count, true_true/t_count
+                recall+=1
+    precision/=p_count
+    recall/=r_count
+    return precision, recall, 2*precision*recall/(precision+recall)
 
-datacreate_test_multi('A')
-datacreate_test_multi('B')
+cross_validation('A')

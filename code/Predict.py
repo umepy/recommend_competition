@@ -14,6 +14,7 @@ import datetime
 from sklearn.decomposition import NMF
 from imblearn.ensemble import BalancedBaggingClassifier
 from sklearn.feature_extraction import DictVectorizer
+import cudamat as cm
 
 class Predict():
     def __init__(self):
@@ -265,16 +266,17 @@ class Predict():
             model = NMF(n_components=128, max_iter=1024, tol=0.001)
             user_feature_matrix = model.fit_transform(sparse_data)
             item_feature_matrix = model.components_
-            with open('../data/conv_pred/train_data_' + name + '.pickle', 'rb') as f:
-                data = pickle.load(f)
-            with open('../data/conv_pred/test_X_' + name + '.pickle', 'rb') as f:
-                name_dic_train = pickle.load(f)
-            v = DictVectorizer()
-            X = v.fit_transform(data['X'])
-            y = np.array(data['y'])
+            if name != 'C':
+                with open('../data/conv_pred/train_data_' + name + '.pickle', 'rb') as f:
+                    data = pickle.load(f)
+                with open('../data/conv_pred/test_X_cut_' + name + '.pickle', 'rb') as f:
+                    name_dic_train = pickle.load(f)
+                v = DictVectorizer()
+                X = v.fit_transform(data['X'])
+                y = np.array(data['y'])
 
-            forest = BalancedBaggingClassifier(n_estimators=500, n_jobs=1)
-            forest.fit(X, y)
+                forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                forest.fit(X, y)
         test_min = datetime.datetime(year=2017, month=5, day=1)
         predict_test = {}
         for i in tqdm.tqdm(test_ids):
@@ -311,7 +313,7 @@ class Predict():
                     sorted_list2 = []
                     input_data = []
                     for k in sorted_list:
-                        if len(name_dic_train[i][k]) != 0:
+                        if k in name_dic_train[i].keys() and len(name_dic_train[i][k]) != 0:
                             sorted_list2.append(k)
                             input_data.append(name_dic_train[i][k])
                     if len(input_data) != 0:
@@ -332,7 +334,8 @@ class Predict():
                 nmf_number=22-len(sorted_list)
 
                 if nmf_number>0:
-                    est_user_eval = np.dot(user_feature_matrix[id_dic['user_id'].index(i)], item_feature_matrix)
+                    #est_user_eval = np.dot(user_feature_matrix[id_dic['user_id'].index(i)], item_feature_matrix)
+                    est_user_eval = cm.dot(cm.CUDAMatrix(user_feature_matrix[id_dic['user_id'].index(i):id_dic['user_id'].index(i) + 1]),cm.CUDAMatrix(item_feature_matrix)).asarray()[0]
                     tmp = sorted(zip(est_user_eval, id_dic['product_id']), key=lambda x: x[0], reverse=True)
                     predict = list(zip(*tmp))[1]
 

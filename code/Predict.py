@@ -267,7 +267,7 @@ class Predict():
             user_feature_matrix = model.fit_transform(sparse_data)
             item_feature_matrix = model.components_
             if name != 'C':
-                with open('../data/conv_pred/train_data_' + name + '.pickle', 'rb') as f:
+                with open('../data/conv_pred/train_data2_' + name + '.pickle', 'rb') as f:
                     data = pickle.load(f)
                 with open('../data/conv_pred/test_X_cut_' + name + '.pickle', 'rb') as f:
                     name_dic_train = pickle.load(f)
@@ -334,8 +334,8 @@ class Predict():
                 nmf_number=22-len(sorted_list)
 
                 if nmf_number>0:
-                    #est_user_eval = np.dot(user_feature_matrix[id_dic['user_id'].index(i)], item_feature_matrix)
-                    est_user_eval = cm.dot(cm.CUDAMatrix(user_feature_matrix[id_dic['user_id'].index(i):id_dic['user_id'].index(i) + 1]),cm.CUDAMatrix(item_feature_matrix)).asarray()[0]
+                    est_user_eval = np.dot(user_feature_matrix[id_dic['user_id'].index(i)], item_feature_matrix)
+                    #est_user_eval = cm.dot(cm.CUDAMatrix(user_feature_matrix[id_dic['user_id'].index(i):id_dic['user_id'].index(i) + 1]),cm.CUDAMatrix(item_feature_matrix)).asarray()[0]
                     tmp = sorted(zip(est_user_eval, id_dic['product_id']), key=lambda x: x[0], reverse=True)
                     predict = list(zip(*tmp))[1]
 

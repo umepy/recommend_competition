@@ -175,22 +175,30 @@ def conversion_test_data(name,keys,rt_data):
         item_dic_data=pickle.load(f)
 
     train_users={}
-    dic_default={'score_conv':0,
-                 'score_click': 0,
-                 'score_view': 0,
-                 'score_cart': 0,
-                 'is_other_item_check': 0,
-                 'day_item_per': 0,
-                 'day_event_per': 0,
-                 'continue_event': 0,
-                 'is_last_event': 0,
-                 'unique_item_num': 0,
-                 'event_num': 0,
-                 'conv_num': 0,
-                 'time_length': 0,
-                 'last_event_type': 0,
-                 'is_conved': 0,
-                 }
+    dic_default = {'score_conv': 0,  # weight conv
+                   'score_click': 0,  # weight click
+                   'score_view': 0,  # weight view
+                   'score_cart': 0,  # weight cart
+                   'day_item_per': 0,  # None - 同じ日の商品割合
+                   'day_event_per': 0,  # None - 同じ日のイベント割合
+                   'continue_event': 0,  # 連続イベント数
+                   'is_last_event': 0,  # その人の最終イベントか？
+                   'unique_item_num': 0,  # ユニークアイテム数
+                   'event_num': 0,  # イベント数
+                   'conv_num': 0,  # 購入数
+                   'time_length': 0,  # 最終イベントがどれくらい離れているか
+                   'last_event_type': 0,  # 最終イベントタイプ
+                   'is_conved': 0,  # 今までで購入されているか
+                   'percentage_conv': 0,  # 購入数 / イベント数
+                   'percentage_uni_item': 0,  # ユニークアイテム数 / イベント数
+                   'item_evented_by_users': 0,  # その商品に行動を起こしたユーザ数
+                   'item_event_each_users': 0,  # その商品の1ユーザーあたりの行動数
+                   'item_conv_num_by_users': 0,  # その商品の購入数
+                   'item_conved_by_event': 0,  # その商品の購入されている割合 (conv / event)
+                   'item_conved_by_users': 0,  # その商品の購入されている割合 (conv / user)
+                   'hot_item_by_users': 0,  # 流行の購入される商品なのか？ (conv * time_weight)
+                   'hot_item_each_users': 0,  # 流行の購入される商品なのか？ (conv * time_weight) / user_num
+                   }
     test_min = datetime.datetime(year=2017, month=5, day=1)
 
     for user in tqdm(keys):
@@ -245,6 +253,7 @@ def conversion_test_data(name,keys,rt_data):
 
             # item 固有の情報
             tmp_item_dic = item_dic_data[item]
+            tmp_item_dic = tmp_item_dic[tmp_item_dic['time_stamp']>datetime.datetime(year=2017, month=4, day=7)]
             user_num = len(pd.unique(tmp_item_dic['user_id']))
             event_num = len(tmp_item_dic)
             conv_num = len(tmp_item_dic[tmp_item_dic['event_type'] == 3])
@@ -303,7 +312,9 @@ def cross_validation(name):
     v=DictVectorizer()
     X=v.fit_transform(data['X'])
     y=np.array(data['y'])
-    kf=KFold(n_splits=10)
+
+    cv=5
+    kf=KFold(n_splits=cv)
     fscore=0
     ftscore=0
     all_f_value=0
@@ -311,7 +322,7 @@ def cross_validation(name):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
         #model = RandomForestClassifier(n_estimators=100, n_jobs=8,class_weight={0:1,1:3000})
-        model = BalancedBaggingClassifier(n_estimators=500,n_jobs=8)
+        model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
         model.fit(X_train,y_train)
         predict=model.predict_proba(X_test)
         precision,recall,f_value=eval(y_test,predict)
@@ -322,9 +333,9 @@ def cross_validation(name):
         zip(np.mean([est.steps[1][1].feature_importances_ for est in model.estimators_], axis=0), v.feature_names_),
         key=lambda x: x[0], reverse=True))
     print('\n')
-    print('final precision : ',str(fscore/10))
-    print('final recall : ', str(ftscore / 10))
-    print('final f-value : ', str(all_f_value / 10))
+    print('final precision : ',str(fscore/cv))
+    print('final recall : ', str(ftscore / cv))
+    print('final f-value : ', str(all_f_value / cv))
 
 def eval(test,pred):
     precision=0

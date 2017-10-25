@@ -87,16 +87,20 @@ class CrossValidation():
         if method==14:
             self.nmf = NMF(n_components=128, max_iter=1024, tol=0.001)
             self.user_feature_matrix = self.nmf.fit_transform(self.sparse_data)
+            with open('../data/nmf/user_feature_'+self.name+'.pickle','wb') as f:
+                pickle.dump(self.user_feature_matrix,f)
+            with open('../data/nmf/item_feature_'+self.name+'.pickle','wb') as f:
+                pickle.dump(self.nmf.components_,f)
             if self.name!='D':
-                with open('../data/conv_pred/train_data_' + self.name + '.pickle', 'rb') as f:
+                with open('../data/conv_pred/train_data2_' + self.name + '.pickle', 'rb') as f:
                     data = pickle.load(f)
-                with open('../data/conv_pred/train_X_' + self.name + '.pickle', 'rb') as f:
+                with open('../data/conv_pred/train_X2_' + self.name + '.pickle', 'rb') as f:
                     self.name_dic_train = pickle.load(f)
                 self.v = DictVectorizer()
                 X = self.v.fit_transform(data['X'])
                 y = np.array(data['y'])
 
-                self.model = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                self.model = BalancedBaggingClassifier(n_estimators=100, n_jobs=1,max_features=8)
                 self.model.fit(X, y)
 
     #データを読み込み分割
@@ -629,8 +633,8 @@ class CrossValidation():
     # 方法14 - 過去と協調のハイブリッド+RandomForest推薦手法
     def method14_past_and_collaborate(self, num):
         # GPUを用いて行列演算（初期化）
-        cm.cuda_set_device(0)
-        cm.init()
+        # cm.cuda_set_device(0)
+        # cm.init()
         parm_dic = {'A': {'conv': 0, 'click': 0, 'view': 0.95845924, 'cart': 0.22327048},
                     'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
                     'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
@@ -652,20 +656,7 @@ class CrossValidation():
 
             # 過去のデータから商品の重みを計算
             for j in past_items:
-                tmp_dict[j] = 0
-                for _, row in self.personal_train[i][self.personal_train[i]['product_id'] == j].iterrows():
-                    if row['event_type'] == 3:
-                        tmp_dict[j] += parm_dic[self.name]['conv'] * time_weight[
-                            -1 * (row['time_stamp'] - test_min).days]
-                    elif row['event_type'] == 2:
-                        tmp_dict[j] += parm_dic[self.name]['click'] * time_weight[
-                            -1 * (row['time_stamp'] - test_min).days]
-                    elif row['event_type'] == 1:
-                        tmp_dict[j] += parm_dic[self.name]['view'] * time_weight[
-                            -1 * (row['time_stamp'] - test_min).days]
-                    elif row['event_type'] == 0:
-                        tmp_dict[j] += parm_dic[self.name]['cart'] * time_weight[
-                            -1 * (row['time_stamp'] - test_min).days]
+                tmp_dict[j] = self.name_dic_train[i][j]['score_conv']*parm_dic[self.name]['conv']+self.name_dic_train[i][j]['score_click']*parm_dic[self.name]['click']+self.name_dic_train[i][j]['score_view']*parm_dic[self.name]['view']+self.name_dic_train[i][j]['score_cart']*parm_dic[self.name]['cart']
 
             sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
             sorted_list = [x for x, y in sorted_list]
@@ -693,10 +684,11 @@ class CrossValidation():
 
             amari=22-len(sorted_list)
             if amari>0:
-                index_user = self.id_dic['user_id'].index(i)
-                nmf_result = cm.dot(cm.CUDAMatrix(self.user_feature_matrix[index_user:index_user + 1]),
-                                    cm.CUDAMatrix(item_feature_matrix)).asarray()
-                est_user_eval = nmf_result[0]
+                # index_user = self.id_dic['user_id'].index(i)
+                # nmf_result = cm.dot(cm.CUDAMatrix(self.user_feature_matrix[index_user:index_user + 1]),
+                #                     cm.CUDAMatrix(item_feature_matrix)).asarray()
+                # est_user_eval = nmf_result[0]
+                est_user_eval = np.dot(self.user_feature_matrix[self.id_dic['user_id'].index(i)], item_feature_matrix)
 
                 # 2-way marge
                 nmf_sort=list(zip(*sorted(zip(self.id_dic['product_id'],est_user_eval),key=lambda x:x[1],reverse=True)))[0]

@@ -4,17 +4,21 @@
 import pickle
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LogisticRegressionCV
+from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.naive_bayes import GaussianNB
 from tqdm import tqdm
 import copy
 import datetime
 from pprint import pprint
 from multiprocessing import Process,Manager
 from sklearn.model_selection import KFold
-from imblearn.ensemble import BalancedBaggingClassifier
+from imblearn.ensemble import BalancedBaggingClassifier,BalanceCascade
 from pprint import pprint
+from sklearn.neural_network import MLPClassifier
+import xgboost as xgb
 
 # 任意のブロック数に分割
 def chunks(l, n):
@@ -307,7 +311,7 @@ def randomforest(name):
     print(model.oob_score_)
 
 def cross_validation(name):
-    with open('../data/conv_pred/train_data2_'+name+'.pickle','rb') as f:
+    with open('../data/conv_pred/train_data_'+name+'.pickle','rb') as f:
         data=pickle.load(f)
     v=DictVectorizer()
     X=v.fit_transform(data['X'])
@@ -322,7 +326,8 @@ def cross_validation(name):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
         #model = RandomForestClassifier(n_estimators=100, n_jobs=8,class_weight={0:1,1:3000})
-        model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
+        #model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
+        model = xgb.XGBClassifier()
         model.fit(X_train,y_train)
         predict=model.predict_proba(X_test)
         precision,recall,f_value=eval(y_test,predict)
@@ -337,7 +342,57 @@ def cross_validation(name):
     print('final recall : ', str(ftscore / cv))
     print('final f-value : ', str(all_f_value / cv))
 
+def cross_validation_ensenble(name):
+    with open('../data/conv_pred/train_data2_'+name+'.pickle','rb') as f:
+        data=pickle.load(f)
+    v=DictVectorizer()
+    X=v.fit_transform(data['X'])
+    y=np.array(data['y'])
+
+    cv=5
+    kf=KFold(n_splits=cv)
+    fscore=0
+    ftscore=0
+    all_f_value=0
+    for train_index,test_index in tqdm(kf.split(X)):
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+
+        ensenble_num=2
+
+        bc = BalanceCascade(estimator=LogisticRegression(),n_max_subset=ensenble_num)
+        bc_x, bc_y = bc.fit_sample(X_train, y_train)
+        models=[]
+        predicts=[]
+        final_result=[]
+        models.append(RandomForestClassifier(n_estimators=100, n_jobs=8))
+        models.append(MLPClassifier(solver="sgd",random_state=0,max_iter=10000))
+        #models.append(BalancedBaggingClassifier(n_estimators=100,n_jobs=8))
+        #models.append(KNeighborsClassifier(n_jobs=8))
+        for i in range(ensenble_num):
+            models[i].fit(bc_x[i],bc_y[i])
+        for i in range(ensenble_num):
+            predicts.append(models[i].predict_proba(X_test))
+        for i in range(len(predicts[0])):
+            result=[0,0]
+            for j in range(ensenble_num):
+                result[0]+=predicts[j][i][0]/ensenble_num
+                result[1] += predicts[j][i][1]/ensenble_num
+            final_result.append(result)
+        precision,recall,f_value=eval(y_test,final_result)
+        fscore+=precision
+        ftscore+=recall
+        all_f_value+=f_value
+    # pprint(sorted(
+    #     zip(np.mean([est.steps[1][1].feature_importances_ for est in model.estimators_], axis=0), v.feature_names_),
+    #     key=lambda x: x[0], reverse=True))
+    print('\n')
+    print('final precision : ',str(fscore/cv))
+    print('final recall : ', str(ftscore / cv))
+    print('final f-value : ', str(all_f_value / cv))
+
 def eval(test,pred):
+    assert len(test)==len(pred)
     precision=0
     p_count=0
     recall=0

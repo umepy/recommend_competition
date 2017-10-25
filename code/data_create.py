@@ -38,7 +38,7 @@ def datacreate_multi(name):
     output={}
     for i in t_data:
         output.update(i)
-    with open('../data/conv_pred/train_X2_'+name+'.pickle','wb') as f:
+    with open('../data/conv_pred/train_X_'+name+'.pickle','wb') as f:
         pickle.dump(output,f)
 
 # コンバージョンされるかどうかのデータ
@@ -66,13 +66,13 @@ def conversion_data(name,keys,rt_data):
                  'is_conved': 0,            # 今までで購入されているか
                  'percentage_conv':0,       # 購入数 / イベント数
                  'percentage_uni_item': 0,  # ユニークアイテム数 / イベント数
-                 'item_evented_by_users':0, # その商品に行動を起こしたユーザ数
-                 'item_event_each_users': 0,# その商品の1ユーザーあたりの行動数
-                 'item_conv_num_by_users':0,# その商品の購入数
-                 'item_conved_by_event': 0, # その商品の購入されている割合 (conv / event)
-                 'item_conved_by_users': 0, # その商品の購入されている割合 (conv / user)
-                 'hot_item_by_users':0,     # 流行の購入される商品なのか？ (conv * time_weight)
-                 'hot_item_each_users': 0,  # 流行の購入される商品なのか？ (conv * time_weight) / user_num
+                 # 'item_evented_by_users':0, # その商品に行動を起こしたユーザ数
+                 # 'item_event_each_users': 0,# その商品の1ユーザーあたりの行動数
+                 # 'item_conv_num_by_users':0,# その商品の購入数
+                 # 'item_conved_by_event': 0, # その商品の購入されている割合 (conv / event)
+                 # 'item_conved_by_users': 0, # その商品の購入されている割合 (conv / user)
+                 # 'hot_item_by_users':0,     # 流行の購入される商品なのか？ (conv * time_weight)
+                 # 'hot_item_each_users': 0,  # 流行の購入される商品なのか？ (conv * time_weight) / user_num
                  }
     test_min = datetime.datetime(year=2017, month=4, day=24)
 
@@ -125,21 +125,21 @@ def conversion_data(name,keys,rt_data):
             item_dic['percentage_unique_item'] = item_num / float(event_num)
 
             # item 固有の情報
-            tmp_item_dic=item_dic_data[item]
-            tmp_item_dic=tmp_item_dic[tmp_item_dic['time_stamp']<test_min]
-            user_num=len(pd.unique(tmp_item_dic['user_id']))
-            event_num=len(tmp_item_dic)
-            conv_num=len(tmp_item_dic[tmp_item_dic['event_type']==3])
-            item_dic['item_evented_by_users']= user_num
-            item_dic['item_event_each_users'] = event_num/user_num
-            item_dic['item_conv_num_by_users'] = conv_num
-            item_dic['item_conved_by_event'] = conv_num/event_num
-            item_dic['item_conved_by_users'] = conv_num/user_num
-
-            tmp_item_dic=tmp_item_dic[tmp_item_dic['event_type']==3]
-            for _,row in tmp_item_dic.iterrows():
-                item_dic['hot_item_by_users'] += time_weight[(test_min - row['time_stamp']).days]
-            item_dic['hot_item_each_users']=item_dic['hot_item_by_users']/user_num
+            # tmp_item_dic=item_dic_data[item]
+            # tmp_item_dic=tmp_item_dic[tmp_item_dic['time_stamp']<test_min]
+            # user_num=len(pd.unique(tmp_item_dic['user_id']))
+            # event_num=len(tmp_item_dic)
+            # conv_num=len(tmp_item_dic[tmp_item_dic['event_type']==3])
+            # item_dic['item_evented_by_users']= user_num
+            # item_dic['item_event_each_users'] = event_num/user_num
+            # item_dic['item_conv_num_by_users'] = conv_num
+            # item_dic['item_conved_by_event'] = conv_num/event_num
+            # item_dic['item_conved_by_users'] = conv_num/user_num
+            #
+            # tmp_item_dic=tmp_item_dic[tmp_item_dic['event_type']==3]
+            # for _,row in tmp_item_dic.iterrows():
+            #     item_dic['hot_item_by_users'] += time_weight[(test_min - row['time_stamp']).days]
+            # item_dic['hot_item_each_users']=item_dic['hot_item_by_users']/user_num
 
             train_items[item]=item_dic
 
@@ -251,22 +251,22 @@ def conversion_test_data(name,keys,rt_data):
             item_dic['percentage_conv'] = conv_num / float(event_num)
             item_dic['percentage_unique_item'] = item_num / float(event_num)
 
-            # item 固有の情報
-            tmp_item_dic = item_dic_data[item]
-            tmp_item_dic = tmp_item_dic[tmp_item_dic['time_stamp']>datetime.datetime(year=2017, month=4, day=7)]
-            user_num = len(pd.unique(tmp_item_dic['user_id']))
-            event_num = len(tmp_item_dic)
-            conv_num = len(tmp_item_dic[tmp_item_dic['event_type'] == 3])
-            item_dic['item_evented_by_users'] = user_num
-            item_dic['item_event_each_users'] = event_num / user_num
-            item_dic['item_conv_num_by_users'] = conv_num
-            item_dic['item_conved_by_event'] = conv_num / event_num
-            item_dic['item_conved_by_users'] = conv_num / user_num
-
-            tmp_item_dic = tmp_item_dic[tmp_item_dic['event_type'] == 3]
-            for _, row in tmp_item_dic.iterrows():
-                item_dic['hot_item_by_users'] += time_weight[(test_min - row['time_stamp']).days]
-            item_dic['hot_item_each_users'] = item_dic['hot_item_by_users'] / user_num
+            # # item 固有の情報
+            # tmp_item_dic = item_dic_data[item]
+            # tmp_item_dic = tmp_item_dic[tmp_item_dic['time_stamp']>datetime.datetime(year=2017, month=4, day=7)]
+            # user_num = len(pd.unique(tmp_item_dic['user_id']))
+            # event_num = len(tmp_item_dic)
+            # conv_num = len(tmp_item_dic[tmp_item_dic['event_type'] == 3])
+            # item_dic['item_evented_by_users'] = user_num
+            # item_dic['item_event_each_users'] = event_num / user_num
+            # item_dic['item_conv_num_by_users'] = conv_num
+            # item_dic['item_conved_by_event'] = conv_num / event_num
+            # item_dic['item_conved_by_users'] = conv_num / user_num
+            #
+            # tmp_item_dic = tmp_item_dic[tmp_item_dic['event_type'] == 3]
+            # for _, row in tmp_item_dic.iterrows():
+            #     item_dic['hot_item_by_users'] += time_weight[(test_min - row['time_stamp']).days]
+            # item_dic['hot_item_each_users'] = item_dic['hot_item_by_users'] / user_num
 
             train_items[item]=item_dic
 

@@ -19,6 +19,7 @@ from imblearn.ensemble import BalancedBaggingClassifier,BalanceCascade
 from pprint import pprint
 from sklearn.neural_network import MLPClassifier
 import xgboost as xgb
+import GPyOpt
 
 # 任意のブロック数に分割
 def chunks(l, n):
@@ -281,7 +282,7 @@ def conversion_test_data(name,keys,rt_data):
 # 予測値を作成する関数
 def conversion_y(name):
     test = pd.read_pickle('../data/personal/personal_test_' + name + '.pickle')
-    with open('../data/conv_pred/train_X2_'+name+'.pickle', 'rb') as f:
+    with open('../data/conv_pred/train_X_'+name+'.pickle', 'rb') as f:
         created_data=pickle.load(f)
     train_X=[]
     train_y=[]
@@ -291,6 +292,7 @@ def conversion_y(name):
         for item in created_data[user].keys():
             train_X.append(created_data[user][item])
             tmp_dic=test[user][test[user]['product_id']==item]
+            tmp_dic=tmp_dic[tmp_dic['time_stamp']>datetime.datetime(year=2017, month=4, day=26)]
             if  len(pd.unique(tmp_dic['event_type']))==0:
                 train_y.append(0)
             elif max(pd.unique(tmp_dic['event_type']))==3:
@@ -298,7 +300,7 @@ def conversion_y(name):
             else:
                 train_y.append(0)
     output={'X':train_X,'y':train_y}
-    with open('../data/conv_pred/train_data2_'+name+'.pickle','wb') as f:
+    with open('../data/conv_pred/train_data_y3456_'+name+'.pickle','wb') as f:
         pickle.dump(output,f)
 
 def randomforest(name):
@@ -310,8 +312,8 @@ def randomforest(name):
     model.fit(X,data['y'])
     print(model.oob_score_)
 
-def cross_validation(name):
-    with open('../data/conv_pred/train_data_'+name+'.pickle','rb') as f:
+def cross_validation(x):
+    with open('../data/conv_pred/train_data_y12_'+'A'+'.pickle','rb') as f:
         data=pickle.load(f)
     v=DictVectorizer()
     X=v.fit_transform(data['X'])
@@ -322,25 +324,28 @@ def cross_validation(name):
     fscore=0
     ftscore=0
     all_f_value=0
+    all_prec=0
     for train_index,test_index in tqdm(kf.split(X)):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
         #model = RandomForestClassifier(n_estimators=100, n_jobs=8,class_weight={0:1,1:3000})
         #model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
-        model = xgb.XGBClassifier()
+        model = xgb.XGBClassifier(n_estimators=500,max_delta_step=1,scale_pos_weight=380)
         model.fit(X_train,y_train)
         predict=model.predict_proba(X_test)
-        precision,recall,f_value=eval(y_test,predict)
+        precision,recall,f_value,all_pre=eval(y_test,predict)
+        all_prec+=all_pre
         fscore+=precision
         ftscore+=recall
         all_f_value+=f_value
-    pprint(sorted(
-        zip(np.mean([est.steps[1][1].feature_importances_ for est in model.estimators_], axis=0), v.feature_names_),
-        key=lambda x: x[0], reverse=True))
+    # pprint(sorted(
+    #     zip(np.mean([est.steps[1][1].feature_importances_ for est in model.estimators_], axis=0), v.feature_names_),
+    #     key=lambda x: x[0], reverse=True))
     print('\n')
     print('final precision : ',str(fscore/cv))
     print('final recall : ', str(ftscore / cv))
     print('final f-value : ', str(all_f_value / cv))
+    print('final all_precision : ', str(all_prec / cv))
 
 def cross_validation_ensenble(name):
     with open('../data/conv_pred/train_data2_'+name+'.pickle','rb') as f:
@@ -358,17 +363,14 @@ def cross_validation_ensenble(name):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
 
-        ensenble_num=2
+        ensenble_num=1
 
         bc = BalanceCascade(estimator=LogisticRegression(),n_max_subset=ensenble_num)
         bc_x, bc_y = bc.fit_sample(X_train, y_train)
         models=[]
         predicts=[]
         final_result=[]
-        models.append(RandomForestClassifier(n_estimators=100, n_jobs=8))
-        models.append(MLPClassifier(solver="sgd",random_state=0,max_iter=10000))
-        #models.append(BalancedBaggingClassifier(n_estimators=100,n_jobs=8))
-        #models.append(KNeighborsClassifier(n_jobs=8))
+        models.append(xgb.XGBClassifier(n_estimators=500,max_delta_step=1))
         for i in range(ensenble_num):
             models[i].fit(bc_x[i],bc_y[i])
         for i in range(ensenble_num):
@@ -379,7 +381,7 @@ def cross_validation_ensenble(name):
                 result[0]+=predicts[j][i][0]/ensenble_num
                 result[1] += predicts[j][i][1]/ensenble_num
             final_result.append(result)
-        precision,recall,f_value=eval(y_test,final_result)
+        precision,recall,f_value,_=eval(y_test,final_result)
         fscore+=precision
         ftscore+=recall
         all_f_value+=f_value
@@ -397,8 +399,9 @@ def eval(test,pred):
     p_count=0
     recall=0
     r_count=0
+    all_prec=0
     for i in range(len(test)):
-        if pred[i][1]>=0.50:
+        if pred[i][1]>0.50:
             p_count+=1
             if test[i]==1:
                 precision+=1
@@ -406,8 +409,26 @@ def eval(test,pred):
             r_count+=1
             if pred[i][1]>=0.50:
                 recall+=1
+        if test[i]==0 and pred[i][0]>=0.5:
+            all_prec+=1
+        if test[i]==1 and pred[i][1]>0.5:
+            all_prec+=1
     precision/=p_count
     recall/=r_count
-    return precision, recall, 2*precision*recall/(precision+recall)
+    return precision, recall, 2*precision*recall/(precision+recall),all_prec/len(test)
+
+def baysian_optimazation():
+    bounds = [{'name': 'min_chiled', 'type': 'continuous', 'domain': (0.0, 1.0)},
+              {'name': 'l2_v', 'type': 'continuous', 'domain': (0.0, 1.0)},
+              {'name': 'l2', 'type': 'continuous', 'domain': (0.0, 1.0)},
+              {'name': 'n_iter', 'type': 'discrete', 'domain': (100,200,300)},
+              {'name': 'rank', 'type': 'discrete', 'domain': (2,4,8,16)},]
+    # 事前探索を行います。
+    opt_mnist = GPyOpt.methods.BayesianOptimization(f=cross_validation, domain=bounds,initial_design_numdata=10,verbosity=True)
+
+    # 最適なパラメータを探索します。
+    opt_mnist.run_optimization(max_iter=30,verbosity=True)
+    print("optimized parameters: {0}".format(opt_mnist.x_opt))
+    print("optimized loss: {0}".format(opt_mnist.fx_opt))
 
 cross_validation('A')

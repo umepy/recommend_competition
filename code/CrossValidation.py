@@ -20,10 +20,12 @@ from sklearn.feature_extraction import DictVectorizer
 from fastFM import als,sgd
 from sklearn.preprocessing import Normalizer,StandardScaler
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LogisticRegression
 import csv
 import GPyOpt
 import cudamat as cm
-from imblearn.ensemble import BalancedBaggingClassifier
+from imblearn.ensemble import BalancedBaggingClassifier,BalanceCascade
+import xgboost as xgb
 
 
 class CrossValidation():
@@ -92,16 +94,30 @@ class CrossValidation():
             with open('../data/nmf/item_feature_'+self.name+'.pickle','wb') as f:
                 pickle.dump(self.nmf.components_,f)
             if self.name!='D':
-                with open('../data/conv_pred/train_data2_' + self.name + '.pickle', 'rb') as f:
+                with open('../data/conv_pred/train_data_' + self.name + '.pickle', 'rb') as f:
                     data = pickle.load(f)
-                with open('../data/conv_pred/train_X2_' + self.name + '.pickle', 'rb') as f:
+                with open('../data/conv_pred/train_X_' + self.name + '.pickle', 'rb') as f:
                     self.name_dic_train = pickle.load(f)
                 self.v = DictVectorizer()
                 X = self.v.fit_transform(data['X'])
                 y = np.array(data['y'])
 
-                self.model = BalancedBaggingClassifier(n_estimators=100, n_jobs=1,max_features=8)
-                self.model.fit(X, y)
+                #self.model = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                self.model = model = xgb.XGBClassifier(n_estimators=500,max_delta_step=1,scale_pos_weight=380)
+                model.fit(X,y)
+                #self.model.fit(X, y)
+        if method==15:
+            if self.name!='D':
+                with open('../data/conv_pred/train_data_' + self.name + '.pickle', 'rb') as f:
+                    data = pickle.load(f)
+                with open('../data/conv_pred/train_X_' + self.name + '.pickle', 'rb') as f:
+                    self.name_dic_train = pickle.load(f)
+                self.v = DictVectorizer()
+
+                X = self.v.fit_transform(data['X'])
+                y = np.array(data['y'])
+                self.forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                self.forest.fit(X, y)
 
     #データを読み込み分割
     def read_data(self):
@@ -673,7 +689,7 @@ class CrossValidation():
                 conv_list = []
                 mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
                 for k in range(len(mysort)):
-                    if mysort[k][1] >= 0.5:
+                    if mysort[k][1] > 0.5:
                         conv_list.append(mysort[k][0])
                 for k in sorted_list:
                     if k not in conv_list:
@@ -693,6 +709,57 @@ class CrossValidation():
                 # 2-way marge
                 nmf_sort=list(zip(*sorted(zip(self.id_dic['product_id'],est_user_eval),key=lambda x:x[1],reverse=True)))[0]
                 sorted_list.extend(nmf_sort[:amari])
+
+            predict_test[i] = sorted_list
+        return self.evaluate(predict_test)
+
+    # 方法15 - Predict hikaku
+    def method15_predict_analyze(self, num):
+        parm_dic = {'A': {'conv': 0, 'click': 0, 'view': 0.95845924, 'cart': 0.22327048},
+                    'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
+                    'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
+                    'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
+        test_ids = self.cv_tests[num]
+        predict_test = {}
+        for i in tqdm.tqdm(test_ids):
+            if i not in self.id_dic['user_id']:
+                continue
+
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = self.name_dic_train[i][j]['score_conv'] * parm_dic[self.name]['conv'] + \
+                              self.name_dic_train[i][j]['score_click'] * parm_dic[self.name]['click'] + \
+                              self.name_dic_train[i][j]['score_view'] * parm_dic[self.name]['view'] + \
+                              self.name_dic_train[i][j]['score_cart'] * parm_dic[self.name]['cart']
+
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            sorted_list = [x for x, y in sorted_list]
+            sorted_list2 = []
+            input_data = []
+            for k in sorted_list:
+                if len(self.name_dic_train[i][k]) != 0:
+                    sorted_list2.append(k)
+                    input_data.append(self.name_dic_train[i][k])
+            if len(input_data) != 0 and self.name != 'D':
+                X = self.v.transform(input_data)
+                #pred = self.model.predict_proba(X)
+                pred = self.forest.predict_proba(X)[:, 1]
+                conv_list = []
+                mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
+                #print(mysort)
+                for k in range(len(mysort)):
+                    if mysort[k][1] > 0:
+                        conv_list.append(mysort[k][0])
+                for k in sorted_list:
+                    if k not in conv_list:
+                        conv_list.append(k)
+                sorted_list = conv_list
+            if len(sorted_list) > 22:
+                sorted_list = sorted_list[:22]
 
             predict_test[i] = sorted_list
         return self.evaluate(predict_test)
@@ -755,6 +822,8 @@ class CrossValidation():
             return self.method13_random_forest
         elif num==14:
             return self.method14_past_and_collaborate
+        elif num==15:
+            return self.method15_predict_analyze
         else:
             print('メゾッドを選択してください')
             return -1
@@ -793,14 +862,14 @@ def baysian_optimazation_for_fm():
     opt_mnist = GPyOpt.methods.BayesianOptimization(f=bay_opt, domain=bounds,initial_design_numdata=5,verbosity=True)
 
     # 最適なパラメータを探索します。
-    opt_mnist.run_optimization(max_iter=30,verbosity=True)
+    opt_mnist.run_optimization(max_iter=20,verbosity=True)
     print("optimized parameters: {0}".format(opt_mnist.x_opt))
     print("optimized loss: {0}".format(opt_mnist.fx_opt))
 def bay_opt(x):
-    a = CrossValidation('B', K=5, method=11,x=x)
+    a = CrossValidation('A', K=5, method=15,x=x)
     return a.CV_multi()
 
 
 if __name__=='__main__':
-    all_CV(1,14)
+    all_CV(1,15)
     #baysian_optimazation_for_fm()

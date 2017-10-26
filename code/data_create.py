@@ -282,7 +282,7 @@ def conversion_test_data(name,keys,rt_data):
 # 予測値を作成する関数
 def conversion_y(name):
     test = pd.read_pickle('../data/personal/personal_test_' + name + '.pickle')
-    with open('../data/conv_pred/train_X_'+name+'.pickle', 'rb') as f:
+    with open('../data/conv_pred/train_X2_'+name+'.pickle', 'rb') as f:
         created_data=pickle.load(f)
     train_X=[]
     train_y=[]
@@ -294,13 +294,13 @@ def conversion_y(name):
             tmp_dic=test[user][test[user]['product_id']==item]
             tmp_dic=tmp_dic[tmp_dic['time_stamp']>datetime.datetime(year=2017, month=4, day=26)]
             if  len(pd.unique(tmp_dic['event_type']))==0:
-                train_y.append(0)
-            elif max(pd.unique(tmp_dic['event_type']))==3:
                 train_y.append(1)
+            # elif max(pd.unique(tmp_dic['event_type']))==3:
+            #     train_y.append(1)
             else:
                 train_y.append(0)
     output={'X':train_X,'y':train_y}
-    with open('../data/conv_pred/train_data_y3456_'+name+'.pickle','wb') as f:
+    with open('../data/conv_pred/train_data_notRec2_'+name+'.pickle','wb') as f:
         pickle.dump(output,f)
 
 def randomforest(name):
@@ -313,7 +313,7 @@ def randomforest(name):
     print(model.oob_score_)
 
 def cross_validation(x):
-    with open('../data/conv_pred/train_data_y12_'+'A'+'.pickle','rb') as f:
+    with open('../data/conv_pred/train_data_notRec_'+'A'+'.pickle','rb') as f:
         data=pickle.load(f)
     v=DictVectorizer()
     X=v.fit_transform(data['X'])
@@ -328,9 +328,10 @@ def cross_validation(x):
     for train_index,test_index in tqdm(kf.split(X)):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
+
         #model = RandomForestClassifier(n_estimators=100, n_jobs=8,class_weight={0:1,1:3000})
         #model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
-        model = xgb.XGBClassifier(n_estimators=500,max_delta_step=1,scale_pos_weight=380)
+        model = xgb.XGBClassifier(n_estimators=500,max_delta_step=1)
         model.fit(X_train,y_train)
         predict=model.predict_proba(X_test)
         precision,recall,f_value,all_pre=eval(y_test,predict)

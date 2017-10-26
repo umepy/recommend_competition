@@ -26,6 +26,7 @@ import GPyOpt
 import cudamat as cm
 from imblearn.ensemble import BalancedBaggingClassifier,BalanceCascade
 import xgboost as xgb
+from pprint import pprint
 
 
 class CrossValidation():
@@ -108,16 +109,33 @@ class CrossValidation():
                 #self.model.fit(X, y)
         if method==15:
             if self.name!='D':
-                with open('../data/conv_pred/train_data_' + self.name + '.pickle', 'rb') as f:
+                with open('../data/conv_pred/train_data2_' + self.name + '.pickle', 'rb') as f:
                     data = pickle.load(f)
-                with open('../data/conv_pred/train_X_' + self.name + '.pickle', 'rb') as f:
+                with open('../data/conv_pred/train_X2_' + self.name + '.pickle', 'rb') as f:
                     self.name_dic_train = pickle.load(f)
                 self.v = DictVectorizer()
+                self.select=[0,1,2,3,4,7,8,9,14,15,16,17,18,19,21,22,23,24,25,26]
 
-                X = self.v.fit_transform(data['X'])
+                X = self.v.fit_transform(data['X'])[:,self.select]
+                pprint(self.v.feature_names_)
+                print(len(self.v.feature_names_))
                 y = np.array(data['y'])
                 self.forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
                 self.forest.fit(X, y)
+        if method==16:
+            with open('../data/nmf/user_feature_'+self.name+'.pickle','rb') as f:
+                self.user_feature_matrix=pickle.load(f)
+            with open('../data/nmf/item_feature_'+self.name+'.pickle','rb') as f:
+                self.item_feature_matrix=pickle.load(f)
+            with open('../data/conv_pred/train_data_notRec_' + self.name + '.pickle', 'rb') as f:
+                data = pickle.load(f)
+            with open('../data/conv_pred/train_X_' + self.name + '.pickle', 'rb') as f:
+                self.name_dic_train = pickle.load(f)
+            self.v = DictVectorizer()
+            X = self.v.fit_transform(data['X'])
+            y = np.array(data['y'])
+            self.forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+            self.forest.fit(X, y)
 
     #データを読み込み分割
     def read_data(self):
@@ -745,7 +763,7 @@ class CrossValidation():
                     sorted_list2.append(k)
                     input_data.append(self.name_dic_train[i][k])
             if len(input_data) != 0 and self.name != 'D':
-                X = self.v.transform(input_data)
+                X = self.v.transform(input_data)[:,self.select]
                 #pred = self.model.predict_proba(X)
                 pred = self.forest.predict_proba(X)[:, 1]
                 conv_list = []
@@ -760,6 +778,66 @@ class CrossValidation():
                 sorted_list = conv_list
             if len(sorted_list) > 22:
                 sorted_list = sorted_list[:22]
+
+            predict_test[i] = sorted_list
+        return self.evaluate(predict_test)
+
+    # 方法15 - Predict hikaku
+    def method16_not_recommend(self, num):
+        parm_dic = {'A': {'conv': 0, 'click': 0, 'view': 0.95845924, 'cart': 0.22327048},
+                    'B': {'conv': 1, 'click': 0.43314098, 'view': 0.5480186, 'cart': 1},
+                    'C': {'conv': 0, 'click': 0, 'view': 0.71978554, 'cart': 1},
+                    'D': {'conv': 1, 'click': 0, 'view': 0.82985685, 'cart': 0}}
+        test_ids = self.cv_tests[num]
+        predict_test = {}
+        for i in tqdm.tqdm(test_ids):
+            if i not in self.id_dic['user_id']:
+                continue
+
+            # ユニークitem idを取得
+            tmp_dict = {}
+            past_items = pd.unique(self.personal_train[i]['product_id'])
+
+            # 過去のデータから商品の重みを計算
+            for j in past_items:
+                tmp_dict[j] = self.name_dic_train[i][j]['score_conv'] * parm_dic[self.name]['conv'] + \
+                              self.name_dic_train[i][j]['score_click'] * parm_dic[self.name]['click'] + \
+                              self.name_dic_train[i][j]['score_view'] * parm_dic[self.name]['view'] + \
+                              self.name_dic_train[i][j]['score_cart'] * parm_dic[self.name]['cart']
+
+            sorted_list = sorted(tmp_dict.items(), key=itemgetter(1), reverse=True)
+            sorted_list = [x for x, y in sorted_list]
+            sorted_list2 = []
+            rec_list = []
+            input_data = []
+            for k in sorted_list:
+                if len(self.name_dic_train[i][k]) != 0:
+                    sorted_list2.append(k)
+                    input_data.append(self.name_dic_train[i][k])
+            if len(input_data) != 0 and self.name != 'D':
+                X = self.v.transform(input_data)
+                pred = self.forest.predict_proba(X)[:, 1]
+                conv_list = []
+                mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
+                # print(mysort)
+                for k in range(len(mysort)):
+                    if mysort[k][1] > 5.5:
+                        conv_list.append(mysort[k][0])
+                for k in sorted_list:
+                    if k not in conv_list:
+                        rec_list.append(k)
+                sorted_list = rec_list
+            if len(sorted_list) >= 22:
+                sorted_list = sorted_list[:22]
+            else:
+                est_user_eval = np.dot(self.user_feature_matrix[self.id_dic['user_id'].index(i)], self.item_feature_matrix)
+                tmp = sorted(zip(est_user_eval, self.id_dic['product_id']), key=lambda x: x[0], reverse=True)
+
+                c_num=0
+                while len(sorted_list)<22:
+                    if tmp[c_num][1] not in sorted_list:
+                        sorted_list.append(tmp[c_num][1])
+                    c_num+=1
 
             predict_test[i] = sorted_list
         return self.evaluate(predict_test)
@@ -824,6 +902,8 @@ class CrossValidation():
             return self.method14_past_and_collaborate
         elif num==15:
             return self.method15_predict_analyze
+        elif num==16:
+            return self.method16_not_recommend
         else:
             print('メゾッドを選択してください')
             return -1
@@ -871,5 +951,5 @@ def bay_opt(x):
 
 
 if __name__=='__main__':
-    all_CV(1,15)
+    all_CV(1,16)
     #baysian_optimazation_for_fm()

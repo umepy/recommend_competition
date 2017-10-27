@@ -319,6 +319,16 @@ def cross_validation(x):
     X=v.fit_transform(data['X'])
     y=np.array(data['y'])
 
+    zero=0
+    one=0
+    for i in y:
+        if i==0:
+            zero+=1
+        else:
+            one+=1
+    print(zero)
+    print(one)
+
     cv=5
     kf=KFold(n_splits=cv)
     fscore=0
@@ -331,7 +341,7 @@ def cross_validation(x):
 
         #model = RandomForestClassifier(n_estimators=100, n_jobs=8,class_weight={0:1,1:3000})
         #model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
-        model = xgb.XGBClassifier(n_estimators=500,max_delta_step=1)
+        model = xgb.XGBClassifier(n_estimators=500,max_delta_step=1,scale_pos_weight=zero/one)
         model.fit(X_train,y_train)
         predict=model.predict_proba(X_test)
         precision,recall,f_value,all_pre=eval(y_test,predict)

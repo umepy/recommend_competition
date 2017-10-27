@@ -127,15 +127,23 @@ class CrossValidation():
                 self.user_feature_matrix=pickle.load(f)
             with open('../data/nmf/item_feature_'+self.name+'.pickle','rb') as f:
                 self.item_feature_matrix=pickle.load(f)
-            with open('../data/conv_pred/train_data_notRec_' + self.name + '.pickle', 'rb') as f:
-                data = pickle.load(f)
-            with open('../data/conv_pred/train_X_' + self.name + '.pickle', 'rb') as f:
-                self.name_dic_train = pickle.load(f)
-            self.v = DictVectorizer()
-            X = self.v.fit_transform(data['X'])
-            y = np.array(data['y'])
-            self.forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
-            self.forest.fit(X, y)
+            if self.name not in ['C','D']:
+                with open('../data/conv_pred/train_data_notRec_' + self.name + '.pickle', 'rb') as f:
+                    data = pickle.load(f)
+                with open('../data/conv_pred/train_X_' + self.name + '.pickle', 'rb') as f:
+                    self.name_dic_train = pickle.load(f)
+                self.v = DictVectorizer()
+                X = self.v.fit_transform(data['X'])
+                y = np.array(data['y'])
+                self.forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                self.forest.fit(X, y)
+
+                with open('../data/conv_pred/train_data_' + self.name + '.pickle', 'rb') as f:
+                    data = pickle.load(f)
+                X = self.v.transform(data['X'])
+                y = np.array(data['y'])
+                self.conv_forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                self.conv_forest.fit(X, y)
 
     #データを読み込み分割
     def read_data(self):
@@ -814,18 +822,22 @@ class CrossValidation():
                 if len(self.name_dic_train[i][k]) != 0:
                     sorted_list2.append(k)
                     input_data.append(self.name_dic_train[i][k])
-            if len(input_data) != 0 and self.name != 'D':
+            if len(input_data) != 0 and self.name not in ['C','D']:
                 X = self.v.transform(input_data)
+                conv_pred = self.conv_forest.predict_proba(X)[:,1]
                 pred = self.forest.predict_proba(X)[:, 1]
                 conv_list = []
                 mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
+                conv_mysort = sorted(zip(sorted_list2, conv_pred), key=lambda x: x[1], reverse=True)
                 # print(mysort)
                 for k in range(len(mysort)):
-                    if mysort[k][1] > 5.5:
+                    if mysort[k][1] > 0.5:
                         conv_list.append(mysort[k][0])
-                for k in sorted_list:
-                    if k not in conv_list:
-                        rec_list.append(k)
+                for k in conv_mysort:
+                    if k[1]>0.5:
+                        rec_list.append(k[0])
+                    elif k[0] not in conv_list:
+                        rec_list.append(k[0])
                 sorted_list = rec_list
             if len(sorted_list) >= 22:
                 sorted_list = sorted_list[:22]

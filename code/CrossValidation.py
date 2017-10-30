@@ -847,10 +847,10 @@ class CrossValidation():
                 notRec_sort = sorted(zip(sorted_list2, notRec_pred), key=lambda x: x[1], reverse=True)
                 #positive_sort = sorted(zip(sorted_list2, positive_pred), key=lambda x: x[1], reverse=True)
                 for k in range(len(notRec_sort)):
-                    if notRec_sort[k][1] > 0.9:
+                    if notRec_sort[k][1] > 0.7:
                         notRec_list.append(mysort[k][0])
                 for k in mysort:
-                    if k[1]>=0.5 and k[0] not in notRec_list:
+                    if k[1]>=0.5:
                         rec_list.append(k[0])
                 for k in sorted_list:
                     if k not in rec_list and k not in notRec_list:

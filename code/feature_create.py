@@ -143,6 +143,114 @@ def conversion_y(name):
     output={'X':train_X,'y':train_y}
     return output
 
+def datacreate_test_multi(name):
+    train = pd.read_pickle('../data/personal/personal_' + name + '.pickle')
+    keys=list(train.keys())
+    keys=chunks(keys,8)
+    manager = Manager()
+    rt_data = manager.list()
+    jobs = []
+    for i in range(8):
+        p = Process(target=conversion_data_test, args=(name, keys[i], rt_data))
+        jobs.append(p)
+    [x.start() for x in jobs]
+    [x.join() for x in jobs]
+
+    t_data=list(rt_data)
+    output={}
+    for i in t_data:
+        output.update(i)
+    #return output
+    with open('../data/conv_pred/test_X3_'+name+'.pickle','wb') as f:
+        pickle.dump(output,f)
+
+# コンバージョンされるかどうかのデータ
+def conversion_data_test(name,keys,rt_data):
+    train = pd.read_pickle('../data/personal/personal_' + name + '.pickle')
+    with open('../data/time_weight/fitting_balanced_'+name+'.pickle','rb') as f:
+        time_weight = pickle.load(f)
+    with open('../data/personal/item_' + name + '.pickle', 'rb') as f:
+        item_dic_data=pickle.load(f)
+
+    train_users={}
+    dic_default={'score_conv':0,            # weight conv
+                 'score_click': 0,          # weight click
+                 'score_view': 0,           # weight view
+                 'score_cart': 0,           # weight cart
+                 'continue_event': 0,       # 連続イベント数
+                 'is_last_event': 0,        # その人の最終イベントか？
+                 'unique_item_num': 0,      # ユニークアイテム数
+                 'event_num': 0,            # イベント数
+                 'conv_num': 0,             # 購入数
+                 'time_length': 0,          # 最終イベントがどれくらい離れているか
+                 'last_event_type': 0,      # 最終イベントタイプ
+                 'is_conved': 0,            # 今までで購入されているか
+                 'item_start':0,
+                 'item_end':0
+                 }
+    test_min = datetime.datetime(year=2017, month=5, day=1)
+
+    for user in tqdm(keys):
+        train_items={}
+        user_data=train[user]
+        user_data=user_data.sort_values('time_stamp')
+        user_data = user_data[user_data['time_stamp'] > datetime.datetime(year=2017, month=4, day=7)]
+        final_event=user_data.max()[4]
+        conv_num=len(user_data[user_data['event_type']==3])
+        event_num=len(user_data)
+        item_num=len(pd.unique(user_data['product_id']))
+        continue_dic={}
+
+        now_p=None
+        now_count=0
+        for i_product in user_data['product_id']:
+            if i_product not in continue_dic.keys():
+                continue_dic[i_product]=0
+            if now_p != i_product:
+                if now_p != None:
+                    continue_dic[now_p]=now_count
+                now_p=i_product
+                now_count=1
+            else:
+                now_count+=1
+
+        for item in pd.unique(user_data['product_id']):
+            item_data=user_data[user_data['product_id']==item]
+            item_dic=copy.deepcopy(dic_default)
+            item_final=item_data.max()[4]
+            item_dic['time_length']=(test_min-item_final).total_seconds()/3600
+            for _,row in item_data.iterrows():
+                if row['event_type'] == 1:
+                    item_dic['score_view'] += time_weight[(test_min - row['time_stamp']).days]
+                elif row['event_type'] == 0:
+                    item_dic['score_cart'] += time_weight[(test_min - row['time_stamp']).days]
+                elif row['event_type'] == 2:
+                    item_dic['score_click'] += time_weight[(test_min - row['time_stamp']).days]
+                elif row['event_type'] == 3:
+                    item_dic['score_conv'] += time_weight[(test_min - row['time_stamp']).days]
+                    item_dic['is_conved']=1
+            item_dic['last_event_type']=str(row['event_type'])
+            if row['time_stamp']== final_event:
+                item_dic['is_last_event']=1
+            item_dic['continue_event']=continue_dic[item]
+            item_dic['unique_item_num']=item_num
+            item_dic['conv_num'] = conv_num
+            item_dic['event_num'] = event_num
+            item_dic['percentage_conv']=conv_num/float(event_num)
+            item_dic['percentage_unique_item'] = item_num / float(event_num)
+
+            # item 固有の情報
+            tmp_item_dic=item_dic_data[item]
+            tmp_item_dic=tmp_item_dic[tmp_item_dic['time_stamp']>datetime.datetime(year=2017, month=4, day=7)]
+            item_dic['item_start'] = (test_min - tmp_item_dic.min()[4]).total_seconds()/3600
+            item_dic['item_end'] = (test_min - tmp_item_dic.max()[4]).total_seconds()/3600
+
+
+            train_items[item]=item_dic
+
+        train_users[user]=train_items
+    rt_data.append(train_users)
+
 def cross_validation(name):
     data=conversion_y(name)
     v=DictVectorizer()
@@ -212,4 +320,5 @@ def eval(test,pred):
     recall/=r_count
     return precision, recall, 2*precision*recall/(precision+recall),all_prec/len(test)
 
-datacreate_multi('A')
+datacreate_test_multi('A')
+datacreate_test_multi('B')

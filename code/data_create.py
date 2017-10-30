@@ -5,7 +5,7 @@ import pickle
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier,Re
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.naive_bayes import GaussianNB
@@ -20,6 +20,7 @@ from pprint import pprint
 from sklearn.neural_network import MLPClassifier
 import xgboost as xgb
 import GPyOpt
+from sklearn.tree import DecisionTreeClassifier
 
 # 任意のブロック数に分割
 def chunks(l, n):
@@ -340,7 +341,7 @@ def randomforest(name):
     print(model.oob_score_)
 
 def cross_validation(x):
-    with open('../data/conv_pred/train_positive_'+x+'.pickle','rb') as f:
+    with open('../data/conv_pred/train_data_'+x+'.pickle','rb') as f:
         data=pickle.load(f)
     print(data)
     v=DictVectorizer()
@@ -367,8 +368,8 @@ def cross_validation(x):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
 
-        model = RandomForestRe(n_estimators=100, n_jobs=8)
-        #model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
+        #model = RandomForestRe(n_estimators=100, n_jobs=8)
+        model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
         #model = xgb.XGBClassifier(n_estimators=500,max_delta_step=1,scale_pos_weight=zero/one)
         model.fit(X_train,y_train)
         predict=model.predict_proba(X_test)
@@ -471,9 +472,9 @@ def baysian_optimazation():
     print("optimized loss: {0}".format(opt_mnist.fx_opt))
 
 def cross_validation_another(x):
-    with open('../data/conv_pred/super_train_notRec_'+'A'+'.pickle','rb') as f:
+    with open('../data/conv_pred/super_train_data_day_'+'A'+'.pickle','rb') as f:
         data=pickle.load(f)
-    with open('../data/conv_pred/train_selected_notRec_'+'A'+'.pickle','rb') as f:
+    with open('../data/conv_pred/super_test_data_day_'+'A'+'.pickle','rb') as f:
         test=pickle.load(f)
     v=DictVectorizer()
     X_train=v.fit_transform(data['X'])
@@ -490,8 +491,8 @@ def cross_validation_another(x):
     print(zero)
     print(one)
 
-    #model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
-    model = xgb.XGBClassifier(n_estimators=500, max_delta_step=1, scale_pos_weight=zero / one)
+    model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8,max_samples=0.6)
+    #model = xgb.XGBClassifier(n_estimators=500, max_delta_step=1, scale_pos_weight=zero / one)
     model.fit(X_train,y_train)
     predict=model.predict_proba(X_test)
     precision,recall,f_value,all_pre=eval(y_test,predict)
@@ -506,4 +507,4 @@ def cross_validation_another(x):
     print('final all_precision : ', str(all_prec ))
 
 #conversion_positive_y('A')
-cross_validation('B')
+cross_validation_another('A')

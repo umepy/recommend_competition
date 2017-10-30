@@ -220,7 +220,7 @@ def conversion_test_data(name,keys,rt_data):
 # 予測値を作成する関数
 def conversion_y(name):
     test = pd.read_pickle('../data/personal/personal_test_' + name + '.pickle')
-    with open('../data/conv_pred/super_test_day_X_'+name+'.pickle', 'rb') as f:
+    with open('../data/conv_pred/super_train_X_'+name+'.pickle', 'rb') as f:
         created_data=pickle.load(f)
     train_X=[]
     train_y=[]

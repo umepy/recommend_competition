@@ -28,6 +28,7 @@ from imblearn.ensemble import BalancedBaggingClassifier,BalanceCascade
 import xgboost as xgb
 from pprint import pprint
 import copy
+from sklearn.tree import DecisionTreeClassifier
 
 
 class CrossValidation():
@@ -136,15 +137,16 @@ class CrossValidation():
                 self.v = DictVectorizer()
                 X = self.v.fit_transform(data['X'])
                 y = np.array(data['y'])
-                self.forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                base_model=DecisionTreeClassifier(max_depth=8)
+                self.forest = BalancedBaggingClassifier(base_estimator=base_model,n_estimators=100, n_jobs=1,max_samples=0.6)
                 self.forest.fit(X, y)
 
-                with open('../data/conv_pred/train_data_notRec_' + self.name + '.pickle', 'rb') as f:
-                    data = pickle.load(f)
-                X = self.v.transform(data['X'])
-                y = np.array(data['y'])
-                self.notRec_forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
-                self.notRec_forest.fit(X, y)
+                # with open('../data/conv_pred/train_selected_notRec_' + self.name + '.pickle', 'rb') as f:
+                #     data = pickle.load(f)
+                # X = self.v.transform(data['X'])
+                # y = np.array(data['y'])
+                # self.notRec_forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                # self.notRec_forest.fit(X, y)
 
                 # with open('../data/conv_pred/train_reg_' + self.name + '.pickle', 'rb') as f:
                 #     data = pickle.load(f)
@@ -839,16 +841,16 @@ class CrossValidation():
                     input_data.append(self.name_dic_train[i][k])
             if len(input_data) != 0 and self.name not in ['C','D']:
                 X = self.v.transform(input_data)
-                notRec_pred = self.notRec_forest.predict_proba(X)[:,1]
+                #notRec_pred = self.notRec_forest.predict_proba(X)[:,1]
                 pred = self.forest.predict_proba(X)[:, 1]
                 #positive_pred = self.positive_forest.predict(X)
                 notRec_list = []
                 mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
-                notRec_sort = sorted(zip(sorted_list2, notRec_pred), key=lambda x: x[1], reverse=True)
+                #notRec_sort = sorted(zip(sorted_list2, notRec_pred), key=lambda x: x[1], reverse=True)
                 #positive_sort = sorted(zip(sorted_list2, positive_pred), key=lambda x: x[1], reverse=True)
-                for k in range(len(notRec_sort)):
-                    if notRec_sort[k][1] > 0.7:
-                        notRec_list.append(mysort[k][0])
+                #for k in range(len(notRec_sort)):
+                #    if notRec_sort[k][1] > 0.7:
+                #        notRec_list.append(mysort[k][0])
                 for k in mysort:
                     if k[1]>=0.5:
                         rec_list.append(k[0])
@@ -870,7 +872,7 @@ class CrossValidation():
                 c_num=0
                 #while (len(sorted_list)+len(conv_list))<22:
                 while (len(sorted_list)) < 22:
-                    if tmp[c_num][1] not in sorted_list and tmp[c_num][1] not in notRec_list:
+                    if tmp[c_num][1] not in sorted_list:
                         sorted_list.append(tmp[c_num][1])
                     c_num+=1
                 #sorted_list.extend(conv_list)

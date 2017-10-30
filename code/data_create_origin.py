@@ -38,7 +38,7 @@ def datacreate_multi(name):
     output={}
     for i in t_data:
         output.update(i)
-    with open('../data/conv_pred/train_X_'+name+'.pickle','wb') as f:
+    with open('../data/conv_pred/super_test_day_X_'+name+'.pickle','wb') as f:
         pickle.dump(output,f)
 
 # コンバージョンされるかどうかのデータ
@@ -65,10 +65,12 @@ def conversion_data(name,keys,rt_data):
                  'is_conved': 0,            #
                  }
     test_min = datetime.datetime(year=2017, month=4, day=24)
+    day=23
 
     for user in tqdm(keys):
         train_items={}
         user_data=train[user]
+        user_data=user_data[user_data['time_stamp']<datetime.datetime(year=2017, month=4, day=24)]
         user_data=user_data.sort_values('time_stamp')
         final_event=user_data.max()[4]
         conv_num=len(user_data[user_data['event_type']==3])
@@ -108,9 +110,9 @@ def conversion_data(name,keys,rt_data):
             if row['time_stamp']== final_event:
                 item_dic['is_last_event']=1
             item_dic['continue_event']=continue_dic[item]
-            item_dic['unique_item_num']=item_num
-            item_dic['conv_num'] = conv_num
-            item_dic['event_num'] = event_num
+            item_dic['unique_item_num']=item_num/day
+            item_dic['conv_num'] = conv_num/day
+            item_dic['event_num'] = event_num/day
 
             train_items[item]=item_dic
 
@@ -218,7 +220,7 @@ def conversion_test_data(name,keys,rt_data):
 # 予測値を作成する関数
 def conversion_y(name):
     test = pd.read_pickle('../data/personal/personal_test_' + name + '.pickle')
-    with open('../data/conv_pred/train_X_'+name+'.pickle', 'rb') as f:
+    with open('../data/conv_pred/super_test_day_X_'+name+'.pickle', 'rb') as f:
         created_data=pickle.load(f)
     train_X=[]
     train_y=[]
@@ -228,6 +230,7 @@ def conversion_y(name):
         for item in created_data[user].keys():
             train_X.append(created_data[user][item])
             tmp_dic=test[user][test[user]['product_id']==item]
+            #tmp_dic = tmp_dic[tmp_dic['time_stamp'] > datetime.datetime(year=2017, month=4, day=19)]
             if  len(pd.unique(tmp_dic['event_type']))==0:
                 train_y.append(0)
             elif max(pd.unique(tmp_dic['event_type']))==3:
@@ -235,7 +238,7 @@ def conversion_y(name):
             else:
                 train_y.append(0)
     output={'X':train_X,'y':train_y}
-    with open('../data/conv_pred/train_data_'+name+'.pickle','wb') as f:
+    with open('../data/conv_pred/super_test_data_day_'+name+'.pickle','wb') as f:
         pickle.dump(output,f)
 
 def randomforest(name):
@@ -248,23 +251,23 @@ def randomforest(name):
     print(model.oob_score_)
 
 def cross_validation(name):
-    with open('../data/conv_pred/train_data_'+name+'.pickle','rb') as f:
+    with open('../data/conv_pred/train_data_ad_ignore_'+name+'.pickle','rb') as f:
         data=pickle.load(f)
     v=DictVectorizer()
     X=v.fit_transform(data['X'])
     y=np.array(data['y'])
-    kf=KFold(n_splits=10)
+    kf=KFold(n_splits=5)
     fscore=0
     ftscore=0
     for train_index,test_index in kf.split(X):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
         #model = RandomForestClassifier(n_estimators=100, n_jobs=8,class_weight={0:1,1:3000})
-        model = BalancedBaggingClassifier(n_estimators=500,n_jobs=8,verbose=1)
+        model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
         model.fit(X_train,y_train)
         predict=model.predict_proba(X_test)
         score,t_score=eval(y_test,predict)
-        #pprint(sorted(zip(np.mean([est.steps[1][1].feature_importances_ for est in model.estimators_], axis=0),v.feature_names_),key=lambda x:x[0],reverse=True))
+        pprint(sorted(zip(np.mean([est.steps[1][1].feature_importances_ for est in model.estimators_], axis=0),v.feature_names_),key=lambda x:x[0],reverse=True))
         print('score : ',str(score))
         print('true_score : ', str(t_score))
         fscore+=score
@@ -289,5 +292,4 @@ def eval(test,pred):
                 true_true+=1
     return score/s_count, true_true/t_count
 
-datacreate_test_multi('A')
-datacreate_test_multi('B')
+conversion_y('B')

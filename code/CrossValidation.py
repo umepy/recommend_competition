@@ -27,6 +27,7 @@ import cudamat as cm
 from imblearn.ensemble import BalancedBaggingClassifier,BalanceCascade
 import xgboost as xgb
 from pprint import pprint
+import copy
 
 
 class CrossValidation():
@@ -128,7 +129,7 @@ class CrossValidation():
             with open('../data/nmf/item_feature_'+self.name+'.pickle','rb') as f:
                 self.item_feature_matrix=pickle.load(f)
             if self.name not in ['C','D']:
-                with open('../data/conv_pred/train_data_notRec_' + self.name + '.pickle', 'rb') as f:
+                with open('../data/conv_pred/train_data_' + self.name + '.pickle', 'rb') as f:
                     data = pickle.load(f)
                 with open('../data/conv_pred/train_X_' + self.name + '.pickle', 'rb') as f:
                     self.name_dic_train = pickle.load(f)
@@ -138,12 +139,21 @@ class CrossValidation():
                 self.forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
                 self.forest.fit(X, y)
 
-                with open('../data/conv_pred/train_data_' + self.name + '.pickle', 'rb') as f:
+                with open('../data/conv_pred/train_data_notRec_' + self.name + '.pickle', 'rb') as f:
                     data = pickle.load(f)
                 X = self.v.transform(data['X'])
                 y = np.array(data['y'])
-                self.conv_forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
-                self.conv_forest.fit(X, y)
+                self.notRec_forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                self.notRec_forest.fit(X, y)
+
+                # with open('../data/conv_pred/train_reg_' + self.name + '.pickle', 'rb') as f:
+                #     data = pickle.load(f)
+                # X = self.v.transform(data['X'])
+                # y = np.array(data['y'])
+                # #self.positive_forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                # #self.positive_forest = RandomForestRegressor(n_estimators=100,n_jobs=1)
+                # self.positive_forest = xgb.XGBRegressor(n_estimators=500)
+                # self.positive_forest.fit(X, y)
 
     #データを読み込み分割
     def read_data(self):
@@ -154,6 +164,8 @@ class CrossValidation():
             self.sparse_data = pickle.load(f)
         with open('../data/matrix/id_dic_optimized_' + self.name + '.pickle', 'rb') as f:
             self.id_dic = pickle.load(f)
+        with open('../data/submit_ids.pickle', 'rb') as f:
+            self.submit_ids = pickle.load(f)
     #データを分割
     def split_data(self):
         ran_ids=list(self.personal_train.keys())
@@ -199,6 +211,7 @@ class CrossValidation():
                 count+=1
             else:
                 score+=tmp
+                count+=1
         return score/count
 
     #含有率を調査する関数
@@ -799,6 +812,8 @@ class CrossValidation():
         test_ids = self.cv_tests[num]
         predict_test = {}
         for i in tqdm.tqdm(test_ids):
+            if i not in self.submit_ids[self.name]:
+                continue
             if i not in self.id_dic['user_id']:
                 continue
 
@@ -824,33 +839,42 @@ class CrossValidation():
                     input_data.append(self.name_dic_train[i][k])
             if len(input_data) != 0 and self.name not in ['C','D']:
                 X = self.v.transform(input_data)
-                conv_pred = self.conv_forest.predict_proba(X)[:,1]
+                notRec_pred = self.notRec_forest.predict_proba(X)[:,1]
                 pred = self.forest.predict_proba(X)[:, 1]
-                conv_list = []
+                #positive_pred = self.positive_forest.predict(X)
+                notRec_list = []
                 mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
-                conv_mysort = sorted(zip(sorted_list2, conv_pred), key=lambda x: x[1], reverse=True)
-                # print(mysort)
-                for k in range(len(mysort)):
-                    if mysort[k][1] > 0.5:
-                        conv_list.append(mysort[k][0])
-                for k in conv_mysort:
-                    if k[1]>0.5:
+                notRec_sort = sorted(zip(sorted_list2, notRec_pred), key=lambda x: x[1], reverse=True)
+                #positive_sort = sorted(zip(sorted_list2, positive_pred), key=lambda x: x[1], reverse=True)
+                for k in range(len(notRec_sort)):
+                    if notRec_sort[k][1] > 0.9:
+                        notRec_list.append(mysort[k][0])
+                for k in mysort:
+                    if k[1]>=0.5 and k[0] not in notRec_list:
                         rec_list.append(k[0])
-                    elif k[0] not in conv_list:
-                        rec_list.append(k[0])
+                for k in sorted_list:
+                    if k not in rec_list and k not in notRec_list:
+                        rec_list.append(k)
                 sorted_list = rec_list
             if len(sorted_list) >= 22:
                 sorted_list = sorted_list[:22]
+            # elif len(sorted_list)+len(conv_list) >= 22:
+            #     c_num=0
+            #     while len(sorted_list)< 22:
+            #         sorted_list.append(conv_list[c_num])
+            #         c_num+=1
             else:
                 est_user_eval = np.dot(self.user_feature_matrix[self.id_dic['user_id'].index(i)], self.item_feature_matrix)
                 tmp = sorted(zip(est_user_eval, self.id_dic['product_id']), key=lambda x: x[0], reverse=True)
 
                 c_num=0
-                while len(sorted_list)<22:
-                    if tmp[c_num][1] not in sorted_list:
+                #while (len(sorted_list)+len(conv_list))<22:
+                while (len(sorted_list)) < 22:
+                    if tmp[c_num][1] not in sorted_list and tmp[c_num][1] not in notRec_list:
                         sorted_list.append(tmp[c_num][1])
                     c_num+=1
-
+                #sorted_list.extend(conv_list)
+            assert len(sorted_list)==22
             predict_test[i] = sorted_list
         return self.evaluate(predict_test)
 

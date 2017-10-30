@@ -432,7 +432,7 @@ class Predict():
                         conv_list = []
                         rec_list=[]
                         mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
-                        notRecsort = sorted(zip(sorted_list2, pred_notRec), key=lambda x: x[1], reverse=True)
+                        notRecsort = sorted(zip(sorted_list2, pred_notRec), key=lambda x: x[1], reverse=False)
                         for k in range(len(notRecsort)):
                             if notRecsort[k][1] >= 0.5:
                                 conv_list.append(notRecsort[k][0])
@@ -440,12 +440,20 @@ class Predict():
                             if mysort[k][1] >= 0.5:
                                 rec_list.append(mysort[k][0])
                         for k in old_set:
-                            if k not in rec_list:
+                            if k not in rec_list and k not in conv_list:
                                 rec_list.append(k)
                         sorted_list = rec_list
                 if len(sorted_list) > 22:
                     sorted_list = sorted_list[:22]
+                elif name == 'A':
+                    for k in conv_list:
+                        if len(sorted_list) >= 22:
+                            break
+                        if k not in sorted_list:
+                            sorted_list.append(k)
                 nmf_number = 22 - len(sorted_list)
+                if len(sorted_list) > 22:
+                    sorted_list = sorted_list[:22]
 
                 if nmf_number > 0:
                     est_user_eval = np.dot(user_feature_matrix[id_dic['user_id'].index(i)], item_feature_matrix)

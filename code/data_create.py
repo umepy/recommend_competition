@@ -5,7 +5,7 @@ import pickle
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier,Re
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.naive_bayes import GaussianNB
@@ -281,8 +281,8 @@ def conversion_test_data(name,keys,rt_data):
 
 # 予測値を作成する関数
 def conversion_y(name):
-    test = pd.read_pickle('../data/personal/personal_test_' + name + '.pickle')
-    with open('../data/conv_pred/train_X2_'+name+'.pickle', 'rb') as f:
+    test = pd.read_pickle('../data/personal/personal_train_' + name + '.pickle')
+    with open('../data/conv_pred/train_X_'+name+'.pickle', 'rb') as f:
         created_data=pickle.load(f)
     train_X=[]
     train_y=[]
@@ -292,7 +292,7 @@ def conversion_y(name):
         for item in created_data[user].keys():
             train_X.append(created_data[user][item])
             tmp_dic=test[user][test[user]['product_id']==item]
-            tmp_dic=tmp_dic[tmp_dic['time_stamp']>datetime.datetime(year=2017, month=4, day=26)]
+            #tmp_dic=tmp_dic[tmp_dic['time_stamp']>datetime.datetime(year=2017, month=4, day=24)]
             if  len(pd.unique(tmp_dic['event_type']))==0:
                 train_y.append(1)
             # elif max(pd.unique(tmp_dic['event_type']))==3:
@@ -300,7 +300,34 @@ def conversion_y(name):
             else:
                 train_y.append(0)
     output={'X':train_X,'y':train_y}
-    with open('../data/conv_pred/train_data_notRec2_'+name+'.pickle','wb') as f:
+    with open('../data/conv_pred/super_train_notRec_'+name+'.pickle','wb') as f:
+        pickle.dump(output,f)
+
+# 予測値を作成する関数
+def conversion_positive_y(name):
+    test = pd.read_pickle('../data/personal/personal_test_' + name + '.pickle')
+    with open('../data/conv_pred/train_X_'+name+'.pickle', 'rb') as f:
+        created_data=pickle.load(f)
+    train_X=[]
+    train_y=[]
+    for user in tqdm(created_data.keys()):
+        if len(created_data[user])==0:
+            continue
+        for item in created_data[user].keys():
+            tmp_dic=test[user][test[user]['product_id']==item]
+            if  len(pd.unique(tmp_dic['event_type']))==0:
+                continue
+            elif max(pd.unique(tmp_dic['event_type']))==3:
+                train_X.append(created_data[user][item])
+                train_y.append(8)
+            elif max(pd.unique(tmp_dic['event_type'])) == 2:
+                train_X.append(created_data[user][item])
+                train_y.append(4)
+            else:
+                train_X.append(created_data[user][item])
+                train_y.append(0)
+    output={'X':train_X,'y':train_y}
+    with open('../data/conv_pred/train_reg_'+name+'.pickle','wb') as f:
         pickle.dump(output,f)
 
 def randomforest(name):
@@ -313,8 +340,9 @@ def randomforest(name):
     print(model.oob_score_)
 
 def cross_validation(x):
-    with open('../data/conv_pred/train_data_notRec_'+'A'+'.pickle','rb') as f:
+    with open('../data/conv_pred/train_positive_'+x+'.pickle','rb') as f:
         data=pickle.load(f)
+    print(data)
     v=DictVectorizer()
     X=v.fit_transform(data['X'])
     y=np.array(data['y'])
@@ -339,9 +367,9 @@ def cross_validation(x):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
 
-        #model = RandomForestClassifier(n_estimators=100, n_jobs=8,class_weight={0:1,1:3000})
+        model = RandomForestRe(n_estimators=100, n_jobs=8)
         #model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
-        model = xgb.XGBClassifier(n_estimators=500,max_delta_step=1,scale_pos_weight=zero/one)
+        #model = xgb.XGBClassifier(n_estimators=500,max_delta_step=1,scale_pos_weight=zero/one)
         model.fit(X_train,y_train)
         predict=model.predict_proba(X_test)
         precision,recall,f_value,all_pre=eval(y_test,predict)
@@ -349,9 +377,9 @@ def cross_validation(x):
         fscore+=precision
         ftscore+=recall
         all_f_value+=f_value
-    # pprint(sorted(
-    #     zip(np.mean([est.steps[1][1].feature_importances_ for est in model.estimators_], axis=0), v.feature_names_),
-    #     key=lambda x: x[0], reverse=True))
+    pprint(sorted(
+        zip(np.mean([est.steps[1][1].feature_importances_ for est in model.estimators_], axis=0), v.feature_names_),
+        key=lambda x: x[0], reverse=True))
     print('\n')
     print('final precision : ',str(fscore/cv))
     print('final recall : ', str(ftscore / cv))
@@ -442,4 +470,40 @@ def baysian_optimazation():
     print("optimized parameters: {0}".format(opt_mnist.x_opt))
     print("optimized loss: {0}".format(opt_mnist.fx_opt))
 
-cross_validation('A')
+def cross_validation_another(x):
+    with open('../data/conv_pred/super_train_notRec_'+'A'+'.pickle','rb') as f:
+        data=pickle.load(f)
+    with open('../data/conv_pred/train_selected_notRec_'+'A'+'.pickle','rb') as f:
+        test=pickle.load(f)
+    v=DictVectorizer()
+    X_train=v.fit_transform(data['X'])
+    y_train=np.array(data['y'])
+    X_test = v.transform(test['X'])
+    y_test = np.array(test['y'])
+    zero=0
+    one=0
+    for i in y_train:
+        if i==0:
+            zero+=1
+        else:
+            one+=1
+    print(zero)
+    print(one)
+
+    #model = BalancedBaggingClassifier(n_estimators=100,n_jobs=8)
+    model = xgb.XGBClassifier(n_estimators=500, max_delta_step=1, scale_pos_weight=zero / one)
+    model.fit(X_train,y_train)
+    predict=model.predict_proba(X_test)
+    precision,recall,f_value,all_pre=eval(y_test,predict)
+    all_prec=all_pre
+    fscore=precision
+    ftscore=recall
+    all_f_value=f_value
+    print('\n')
+    print('final precision : ',str(fscore))
+    print('final recall : ', str(ftscore))
+    print('final f-value : ', str(all_f_value))
+    print('final all_precision : ', str(all_prec ))
+
+#conversion_positive_y('A')
+cross_validation('B')

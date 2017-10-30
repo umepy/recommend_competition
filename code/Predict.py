@@ -376,15 +376,23 @@ class Predict():
                 X = v.fit_transform(data['X'])
                 y = np.array(data['y'])
 
-                forest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                forest = BalancedBaggingClassifier(n_estimators=500, n_jobs=1,random_state=777)
                 forest.fit(X, y)
-                with open('../data/conv_pred/train_data_notRec_' + name + '.pickle', 'rb') as f:
-                    data = pickle.load(f)
-                X = v.transform(data['X'])
-                y = np.array(data['y'])
-
-                notRecforest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
-                notRecforest.fit(X, y)
+                forest2 = BalancedBaggingClassifier(n_estimators=500, n_jobs=1, random_state=1234)
+                forest2.fit(X, y)
+                forest3 = BalancedBaggingClassifier(n_estimators=500, n_jobs=1, random_state=1919)
+                forest3.fit(X, y)
+                forest4 = BalancedBaggingClassifier(n_estimators=500, n_jobs=1, random_state=114514)
+                forest4.fit(X, y)
+                forest5 = BalancedBaggingClassifier(n_estimators=500, n_jobs=1, random_state=334)
+                forest5.fit(X, y)
+                # with open('../data/conv_pred/train_data_notRec_' + name + '.pickle', 'rb') as f:
+                #     data = pickle.load(f)
+                # X = v.transform(data['X'])
+                # y = np.array(data['y'])
+                #
+                # notRecforest = BalancedBaggingClassifier(n_estimators=100, n_jobs=1)
+                # notRecforest.fit(X, y)
         test_min = datetime.datetime(year=2017, month=5, day=1)
         predict_test = {}
         for i in tqdm.tqdm(test_ids):
@@ -428,29 +436,34 @@ class Predict():
                     if len(input_data) != 0:
                         X = v.transform(input_data)
                         pred = forest.predict_proba(X)[:,1]
-                        pred_notRec = notRecforest.predict_proba(X)[:,1]
+                        pred2 = forest2.predict_proba(X)[:, 1]
+                        pred3 = forest3.predict_proba(X)[:, 1]
+                        pred4 = forest4.predict_proba(X)[:, 1]
+                        pred5 = forest5.predict_proba(X)[:, 1]
+                        pred=(pred+pred2+pred3+pred4+pred5)/5
+                        #pred_notRec = notRecforest.predict_proba(X)[:,1]
                         conv_list = []
                         rec_list=[]
                         mysort = sorted(zip(sorted_list2, pred), key=lambda x: x[1], reverse=True)
-                        notRecsort = sorted(zip(sorted_list2, pred_notRec), key=lambda x: x[1], reverse=False)
-                        for k in range(len(notRecsort)):
-                            if notRecsort[k][1] >= 0.5:
-                                conv_list.append(notRecsort[k][0])
+                        #notRecsort = sorted(zip(sorted_list2, pred_notRec), key=lambda x: x[1], reverse=False)
+                        # for k in range(len(notRecsort)):
+                        #     if notRecsort[k][1] >= 0.5:
+                        #         conv_list.append(notRecsort[k][0])
                         for k in range(len(mysort)):
                             if mysort[k][1] >= 0.5:
                                 rec_list.append(mysort[k][0])
                         for k in old_set:
-                            if k not in rec_list and k not in conv_list:
+                            if k not in rec_list:
                                 rec_list.append(k)
                         sorted_list = rec_list
                 if len(sorted_list) > 22:
                     sorted_list = sorted_list[:22]
-                elif name == 'A':
-                    for k in conv_list:
-                        if len(sorted_list) >= 22:
-                            break
-                        if k not in sorted_list:
-                            sorted_list.append(k)
+                # elif name == 'A':
+                #     for k in conv_list:
+                #         if len(sorted_list) >= 22:
+                #             break
+                #         if k not in sorted_list:
+                #             sorted_list.append(k)
                 nmf_number = 22 - len(sorted_list)
                 if len(sorted_list) > 22:
                     sorted_list = sorted_list[:22]

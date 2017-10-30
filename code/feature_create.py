@@ -32,7 +32,9 @@ def datacreate_multi(name):
     output={}
     for i in t_data:
         output.update(i)
-    return output
+    #return output
+    with open('../data/conv_pred/train_X3_'+name+'.pickle','wb') as f:
+        pickle.dump(output,f)
 
 # コンバージョンされるかどうかのデータ
 def conversion_data(name,keys,rt_data):
@@ -121,7 +123,7 @@ def conversion_data(name,keys,rt_data):
     rt_data.append(train_users)
 
 def conversion_y(name):
-    test = pd.read_pickle('../data/personal/personal_train_' + name + '.pickle')
+    test = pd.read_pickle('../data/personal/personal_test_' + name + '.pickle')
     created_data = datacreate_multi(name)
     train_X=[]
     train_y=[]
@@ -210,4 +212,4 @@ def eval(test,pred):
     recall/=r_count
     return precision, recall, 2*precision*recall/(precision+recall),all_prec/len(test)
 
-cross_validation('A')
+datacreate_multi('A')
